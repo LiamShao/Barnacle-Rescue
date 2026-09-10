@@ -15,6 +15,8 @@ type LevelConfig = {
   barnacleSizeRange: readonly [number, number];
   timeLimitSeconds: number;
   animalHealth: number;
+  parScore: number;
+  placements: readonly { x: number; y: number; diameter: number; type: BarnacleType }[];
 };
 ```
 
@@ -30,7 +32,13 @@ Zen ignores `timeLimitSeconds` and fail pressure; it does not fork the level or 
 
 These are playtest baselines, not promises. Tune time after measuring typical completion, targeting comfortable Level 1 completion and rising but fair Challenge pressure.
 
+M4 implements these values in `src/levels/levels.ts`. Size ranges refer to diameters in the 820 × 540 design space; domain `size` is the radius. Placements are offsets from the turtle center. Tests verify counts, type mix, unique IDs, increasing total HP, size ranges, containment within the cleanable 235 × 145 shell ellipse, and non-overlapping hit circles at desktop and 320/390-pixel page widths. Hit radius has a 12-pixel minimum for small screens. This is code-verified tuning, not a completed touch or difficulty playtest.
+
+All three levels are available from the selection screen. Successful results offer replay, next rescue (levels 1–2), and selection. Level 3 has a final-rescue message and no next button. Failed runs offer replay and selection, without a grade. Returning to selection discards the current run. M5 enables the configured time limit and health in Challenge; unlocking and persistence remain deferred. Initial par scores for grades are 750 / 950 / 1100 for levels 1 / 2 / 3, pending playtesting.
+
 ## Placement constraints
+
+M6 exposes the same three configurations in both modes. Zen hides the time/health values and skips their mechanics. Mode selection does not change placements, sizes, HP or target counts. Replay and next-level navigation preserve the mode.
 
 - Center each barnacle inside a designated cleanable turtle-body region.
 - Keep the full visual and hit area on the turtle and away from critical facial features.

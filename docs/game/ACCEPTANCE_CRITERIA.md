@@ -13,6 +13,8 @@
 
 ## Complete MVP behavior
 
+Current implemented scope: M1–M7 core scraping, independent normal/hard targets, animal mood/reactions, three configured levels, Challenge, Zen and the main-menu/navigation flow. Choose a mode and any level, replay it, advance after success, or return to selection/home. Challenge shows countdown, health, earned score and combo; expiry/zero health fail without a grade. Successful completion adds the time bonus and grades against configured par score. Zen shares cleaning and reactions without timing, health loss, failure, scoring or grading. Audio, further feedback polish, persistence and final QA/deployment remain future work.
+
 - Given a configured normal or hard barnacle, when scraped, then its own HP/tuning drives the same intact → cracked → breaking → removed lifecycle.
 - Given any of the three level configurations, when a run starts, then count, type mix, HP, size, timer, health, and valid placements come from configuration rather than component branches.
 - Given removal changes progress across a mood threshold, when the temporary relief ends, then the turtle returns to the newly derived mood.
@@ -24,6 +26,16 @@
 - Given desktop and representative touch viewport sizes, when playing and navigating, then controls remain reachable and the gameplay area does not sit under the HUD.
 
 ## Verification policy
+
+M7 browser coverage verifies initial main-menu focus, expandable instructions, absence of a game scene while in menus, accessible cleaning progress, return from an active run and successful result, retained mode and fresh progress after returning. Desktop and 320px layouts are covered. Earlier milestone descriptions refer to historical entry flows; the current entry is Main Menu → combined Mode/Level Select → Game → Result.
+
+M6 browser coverage exercises keyboard mode selection, Zen after simulated elapsed time beyond the Challenge limit and sustained bare-shell scraping, all three Zen levels, score-free results, replay, mode retention, and transitions from Zen to Challenge and failed Challenge back to Zen at desktop and 320px widths. Existing Challenge tests remain regression coverage. Real touch feel and ambience still need manual playtesting.
+
+M5 checks cover elapsed-time expiry and terminal-state locking, unsafe movement accumulation and target-hit reset, health failure, unique removal counting, combo expiry/cap/interruption, score clamping, time bonus and grade thresholds. Browser checks exercise both failure paths, replay after timeout, success grading and the existing multi-level flows.
+
+M4 coverage validates configuration counts, durability, placement containment and separation, and fresh run state. Browser tests exercise selection, all three levels in sequence, next-level boundaries, final-level replay and mid-run navigation at 1280px and 320px widths. Screenshots support layout inspection; automated completion does not establish difficulty balance or real touch feel.
+
+M3 adds deterministic mood threshold, relief restart/expiry, hurt priority, and celebration-lock checks. Browser coverage checks initial mood, return to neutral/relaxed after relief, celebration before the result, and mood reset on replay at desktop and narrow widths. Real mouse/touch playtesting is still needed to assess animation feel and legibility; narrow-width mouse automation does not certify touch interaction.
 
 Keep barnacle damage/state, mood derivation, scoring, level completion, and persistence validation deterministic and unit tested. Use Playwright for app flow, visible state transitions, mode differences, and pointer interaction where reliable. Document a manual drag/touch check when browser automation cannot establish interaction feel. Never mark an item verified unless its check was executed.
 

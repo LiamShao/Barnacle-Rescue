@@ -17,6 +17,10 @@ The primary quality bar is a satisfying loop: scrape a barnacle, see it crack an
 
 A stationary pointer and a simple click do not count as scraping.
 
+Three configured levels contain 3, 5, and 7 barnacles, including 0, 1, and 2 hard targets. Hard barnacles have twice the HP and a gray, double-rimmed appearance. Cleaning progress counts fully detached targets, not partial HP damage. Targets crack and detach independently; the result appears after all targets detach and celebration finishes. The app opens at the main menu; Start rescue opens selection with all three rescues available. “Rescue again” resets the current level; “Next rescue” starts the next level and is absent on the final level. “Choose rescue” returns to selection and discards the current run. Completion and unlocks are not persisted yet.
+
+Animal feedback is shared across all levels: progress determines persistent mood, each non-final detachment triggers a 1.2-second relief reaction, and the final detachment triggers a two-second celebration before the result. A short status caption accompanies facial and body animation. Replay resets mood and reactions. The selection screen offers Challenge and Zen, defaulting to Challenge on page load. Replay, next rescue and return to selection retain the chosen mode; switching mode happens on the selection screen and starts a fresh run.
+
 ## Modes
 
 ### Challenge
@@ -25,9 +29,19 @@ Show a countdown timer, score, cleaning progress, and animal health. Use the ini
 
 On success, grade by score as a share of a level's configured par score: S at 120% or more, A at 100–119%, B at 80–99%, otherwise C. Failed runs receive no success grade. Tune par scores through level data after playtesting rather than changing the formula per level.
 
+M5 rules: timing starts when the scene is ready and uses elapsed monotonic time, including time spent in a background tab. Timeout takes priority if the deadline has passed before an input/removal update. Success is locked after the last target fully detaches; the two-second celebration does not consume time. Any terminal result freezes gameplay and scoring. Replay/next level start fresh; leaving a run discards it.
+
+Dragging on bare shell accumulates movement in design-space pixels: each 80 pixels costs 10 health. Only accepted scrape movements (3–36 screen pixels per sample) count. Clicks, stationary input and movement outside the cleanable shell cost nothing. Intersecting a non-removed target, including one detaching, clears accumulated unsafe movement. Lift to travel between targets; lifting alone does not clear accumulated unsafe distance. Health loss triggers the existing hurt reaction and breaks the combo.
+
+Consecutive removals within five seconds build a combo: the first earns no bonus, then +10, +20, and at most +30 per subsequent removal. More than five seconds or health loss breaks the chain; earned bonus remains. The HUD shows earned points (removals + combo − health penalty), clamped to zero. Only successful results add `10 × floor(remainingSeconds)` as a time bonus. Failure has no time bonus, no grade and no next-level action. Initial par scores are 750 / 950 / 1100; these and the health/combo tuning still require playtesting.
+
+To allow the player to finish a successful gesture, a freshly detached target's hit area remains safe for 0.6 seconds in Challenge. After that, scraping the cleared patch counts as bare-shell movement.
+
 ### Zen
 
 Use the same levels and cleaning systems without countdown pressure, failure, aggressive scoring, or combo pressure. Hide those HUD elements and emphasize ambience, subtle motion, and reactions.
+
+M6 implements Zen using the same target configuration, damage, detachment, mood and celebration code as Challenge. It does not advance Challenge time, accumulate bare-shell damage, or record combos/scores. The HUD shows cleaning progress and animal status; result screens omit scores, bonuses and grades. Level cards hide time/health values. Idle motion and gentle relief/celebration provide the current ambience; audio remains a later milestone. Modes are not persisted across reloads yet.
 
 ## MVP scope
 
@@ -44,6 +58,8 @@ Use the same levels and cleaning systems without countdown pressure, failure, ag
 ## Main flow
 
 Main Menu → Mode Select → Level Select → Game → Result → Replay / Next Level
+
+M7 opens at a main menu with “Start rescue” and an expandable “How to play” guide. Mode and level selection share one screen. Selection, gameplay and results offer “Main menu”; leaving gameplay destroys and discards the current run. The selected mode survives navigation within the page. Returning through Start rescue creates a fresh run when a level is chosen. Focus moves to the primary action on menu/result entry. Cleaning progress exposes an accessible progressbar; Challenge metrics remain outside the canvas. Result content can scroll on small screens, and UI celebration/transition animation respects reduced-motion preferences (Pixi animal animation is unchanged).
 
 ## Non-goals
 

@@ -33,6 +33,10 @@ If multiple non-final removals arrive during relief, restart/extend one relief r
 
 ## Observable animation
 
+The three-target first level visits sad (0%), neutral (33%), relaxed (67%), then happy (100%). The five/seven-target levels use the same thresholds with progress based on their own target count. Non-final removal plays 1.2 seconds of relief, with soft eyes, a head lift, and bubbles. New removals restart that duration. Idle uses mood-specific eyes/mouth, subtle shell breathing, blinking, and flipper motion. Final removal locks input and plays a two-second celebration before the result appears, including a blink, faster flippers, body lift, and bubbles. The celebration pose remains behind the result until replay or navigation. React exposes a short accessible animal-status message only on mood/reaction changes; animation frames remain in PixiJS.
+
+Reaction timing uses the scene ticker, with no delayed callbacks. Replaying creates a new animal and destroys the old scene. In Challenge, bare-shell scraping that costs health triggers hurt for 0.5 seconds. Hurt overrides relief while preserving progress-derived mood. A failed run never starts celebration; success freezes Challenge timing during celebration.
+
 Idle motion combines mood-specific face/pose with subtle breathing, flipper motion, and blinking. Relief adds a small lift/soft bounce and bubbles. Hurt uses a brief recoil without harsh imagery. Celebrate uses the stronger timed sequence in `ART_DIRECTION.md`.
 
 ## Acceptance examples

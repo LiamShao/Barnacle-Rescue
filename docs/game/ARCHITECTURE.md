@@ -64,4 +64,10 @@ This is a starting boundary, not a reason to create unused files or layers.
 
 ## Delivery order
 
+M7 adds a React-owned main-menu state before the combined mode/level screen. Returning home clears the selected level, unmounts the viewport and preserves the selected mode. No game scene runs behind a menu. Native details/summary provide instructions; the HUD exposes progressbar semantics and results remain scrollable within the rescue card.
+
+M6 passes a `GameMode` from React through the viewport into each new scene. Zen gates Challenge time, unsafe-shell penalties and score recording at the scene boundary; shared target damage, removal, progress and animal state remain unchanged. React conditionally renders mode-specific selection text, HUD and result details. Mode changes occur outside gameplay, after destroying the old scene.
+
+M5 uses React-local navigation and session summaries with stable callbacks at the viewport boundary. Each scene receives an immutable `LevelConfig` and creates fresh target and Challenge state. Deterministic Challenge rules live in `src/domain/challenge.ts`; the scene supplies elapsed monotonic time before ticks and input, and publishes HUD changes only at displayed-second or status/score/health/combo changes. Selecting/replaying/advancing remounts the scene; leaving gameplay destroys it. Zustand remains deferred until state sharing requires it.
+
 M0 bootstrap → M1 one interactive barnacle → M2 barnacle system → M3 animal reactions → M4 three levels → M5 Challenge → M6 Zen → M7 shell/HUD/results → M8 juice/audio → M9 persistence → M10 QA/deployment.

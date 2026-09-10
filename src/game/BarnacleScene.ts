@@ -1,10 +1,17 @@
 import { Application, Container, Graphics } from "pixi.js";
-import { createBarnacle, damageBarnacle, finishDetachment, type Barnacle } from "../domain/barnacle";
+import { createBarnacle, damageBarnacle, finishDetachment, isRescueComplete, rescueProgress } from "../domain/barnacle";
+import { levelBarnacles, type LevelConfig } from "../levels/levels";
 import { distance, segmentIntersectsCircle, type Point } from "../domain/geometry";
+import { advanceAnimal, animalAfterRemoval, celebrationFinished, createAnimal, reactAnimal, type AnimalState } from "../domain/animal";
+import { advanceChallenge, challengeScore, createChallenge, recordRemoval, scrapeShell, type ChallengeState } from "../domain/challenge";
+import { TurtleView } from "./TurtleView";
+import type { GameMode } from "../domain/mode";
 
 type SceneCallbacks = {
   onDamage: (remainingPercent: number) => void;
   onComplete: () => void;
+  onAnimalChange: (state: AnimalState) => void;
+  onChallengeChange: (state: ChallengeState) => void;
 };
 
 const MIN_SCRAPE_DISTANCE = 3;
@@ -16,24 +23,40 @@ export class BarnacleScene {
   private readonly app = new Application();
   private readonly world = new Container();
   private readonly background = new Graphics();
-  private readonly turtle = new Graphics();
-  private readonly barnacleView = new Graphics();
+  private readonly turtle = new TurtleView();
+  private animal = createAnimal();
+  private clock = 0;
+  private turtleCenterY = 0;
+  private readonly targets;
+  private createTargets(level: LevelConfig) {
+    return levelBarnacles(level).map((config) => ({
+    barnacle: createBarnacle(config),
+    view: new Graphics(),
+    point: { x: 0, y: 0 },
+    radius: 42,
+    detachElapsed: 0,
+    protectedUntil: 0,
+    }));
+  }
   private readonly scraper = new Graphics();
-  private barnacle: Barnacle = createBarnacle();
-  private target: Point = { x: 0, y: 0 };
-  private targetRadius = 42;
   private activePointer: number | null = null;
   private previousPoint: Point | null = null;
-  private detachElapsed = 0;
-  private celebrationElapsed = 0;
   private completed = false;
   private destroyed = false;
   private initialized = false;
+  private challenge: ChallengeState;
+  private lastTime = 0;
+  private lastSummary = "";
 
   constructor(
     private readonly host: HTMLDivElement,
     private readonly callbacks: SceneCallbacks,
-  ) {}
+    level: LevelConfig,
+    private readonly mode: GameMode,
+  ) {
+    this.targets = this.createTargets(level);
+    this.challenge = createChallenge(level);
+  }
 
   async start(): Promise<void> {
     await this.app.init({ resizeTo: this.host, antialias: true, backgroundAlpha: 0, resolution: window.devicePixelRatio });
@@ -48,9 +71,12 @@ export class BarnacleScene {
     this.app.canvas.style.touchAction = "none";
     this.host.appendChild(this.app.canvas);
     this.app.stage.addChild(this.world);
-    this.world.addChild(this.background, this.turtle, this.barnacleView, this.scraper);
+    this.world.addChild(this.background, this.turtle, ...this.targets.map((target) => target.view), this.scraper);
     this.drawScraper();
     this.layout();
+    this.callbacks.onAnimalChange(this.animal);
+    this.lastTime = performance.now();
+    this.publishChallenge();
 
     this.app.canvas.addEventListener("pointerdown", this.onPointerDown);
     this.app.canvas.addEventListener("pointermove", this.onPointerMove);
@@ -86,41 +112,36 @@ export class BarnacleScene {
     const turtleScale = Math.min(width / 820, height / 540);
     const cx = width * 0.5;
     const cy = height * 0.55;
-    this.turtle.clear();
-    this.turtle.ellipse(cx, cy, 275 * turtleScale, 178 * turtleScale).fill({ color: 0x287c68 });
-    this.turtle.ellipse(cx, cy, 235 * turtleScale, 145 * turtleScale).fill({ color: 0x58aa76 });
-    this.turtle.ellipse(cx, cy, 190 * turtleScale, 112 * turtleScale).stroke({ color: 0x247360, width: 6 });
-    this.turtle.ellipse(cx + 274 * turtleScale, cy - 18 * turtleScale, 75 * turtleScale, 62 * turtleScale).fill({ color: 0x64b982 });
-    this.turtle.circle(cx + 301 * turtleScale, cy - 32 * turtleScale, 7 * turtleScale).fill({ color: 0x173d43 });
-    this.turtle.moveTo(cx + 303 * turtleScale, cy + 7 * turtleScale)
-      .quadraticCurveTo(cx + 326 * turtleScale, cy + 23 * turtleScale, cx + 343 * turtleScale, cy + 4 * turtleScale)
-      .stroke({ color: 0x173d43, width: 4 * turtleScale });
-    this.turtle.ellipse(cx - 168 * turtleScale, cy - 147 * turtleScale, 95 * turtleScale, 32 * turtleScale).fill({ color: 0x64b982 });
-    this.turtle.ellipse(cx - 168 * turtleScale, cy + 147 * turtleScale, 95 * turtleScale, 32 * turtleScale).fill({ color: 0x64b982 });
-    this.turtle.ellipse(cx + 145 * turtleScale, cy - 153 * turtleScale, 90 * turtleScale, 30 * turtleScale).fill({ color: 0x64b982 });
-    this.turtle.ellipse(cx + 145 * turtleScale, cy + 153 * turtleScale, 90 * turtleScale, 30 * turtleScale).fill({ color: 0x64b982 });
+    this.turtleCenterY = cy;
+    this.turtle.position.set(cx, cy);
+    this.turtle.scale.set(turtleScale);
+    this.turtle.animate(this.animal, this.clock);
 
-    this.target = { x: cx + 10 * turtleScale, y: cy - 6 * turtleScale };
-    this.targetRadius = 44 * turtleScale;
-    this.drawBarnacle();
+    for (const target of this.targets) {
+      target.point = { x: cx + target.barnacle.x * turtleScale, y: cy + target.barnacle.y * turtleScale };
+      target.radius = target.barnacle.size * turtleScale;
+      this.drawBarnacle(target);
+    }
   };
 
-  private drawBarnacle(): void {
-    this.barnacleView.clear();
-    if (this.barnacle.state === "removed") return;
+  private drawBarnacle(target: (typeof this.targets)[number]): void {
+    const { barnacle, view, point } = target;
+    view.clear();
+    if (barnacle.state === "removed") return;
 
-    const scale = this.barnacle.state === "breaking" ? Math.max(0, 1 - this.detachElapsed / DETACH_SECONDS) : 1;
-    const radius = this.targetRadius * scale;
-    this.barnacleView.circle(this.target.x, this.target.y, radius).fill({ color: 0xf3d09a }).stroke({ color: 0x8b5b4b, width: 5 });
-    this.barnacleView.circle(this.target.x, this.target.y, radius * 0.48).fill({ color: 0x6e4944 });
+    const scale = barnacle.state === "breaking" ? Math.max(0, 1 - target.detachElapsed / DETACH_SECONDS) : 1;
+    const radius = target.radius * scale;
+    view.circle(point.x, point.y, radius).fill({ color: barnacle.type === "hard" ? 0xaebbc9 : 0xf3d09a }).stroke({ color: 0x8b5b4b, width: 5 });
+    if (barnacle.type === "hard") view.circle(point.x, point.y, radius * 0.78).stroke({ color: 0x50647c, width: 3 });
+    view.circle(point.x, point.y, radius * 0.48).fill({ color: 0x6e4944 });
 
-    if (this.barnacle.state === "cracked" || this.barnacle.state === "breaking") {
-      this.barnacleView.moveTo(this.target.x - radius * 0.62, this.target.y - radius * 0.25)
-        .lineTo(this.target.x - radius * 0.18, this.target.y + radius * 0.04)
-        .lineTo(this.target.x - radius * 0.38, this.target.y + radius * 0.55)
-        .moveTo(this.target.x + radius * 0.48, this.target.y - radius * 0.62)
-        .lineTo(this.target.x + radius * 0.1, this.target.y - radius * 0.08)
-        .lineTo(this.target.x + radius * 0.6, this.target.y + radius * 0.28)
+    if (barnacle.state === "cracked" || barnacle.state === "breaking") {
+      view.moveTo(point.x - radius * 0.62, point.y - radius * 0.25)
+        .lineTo(point.x - radius * 0.18, point.y + radius * 0.04)
+        .lineTo(point.x - radius * 0.38, point.y + radius * 0.55)
+        .moveTo(point.x + radius * 0.48, point.y - radius * 0.62)
+        .lineTo(point.x + radius * 0.1, point.y - radius * 0.08)
+        .lineTo(point.x + radius * 0.6, point.y + radius * 0.28)
         .stroke({ color: 0x613e3b, width: 4 });
     }
   }
@@ -141,7 +162,8 @@ export class BarnacleScene {
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
-    if (this.activePointer !== null || this.completed) return;
+    this.updateTime();
+    if (this.activePointer !== null || this.inputLocked || event.button !== 0) return;
     this.activePointer = event.pointerId;
     this.previousPoint = this.pointFromEvent(event);
     this.scraper.position.copyFrom(this.previousPoint);
@@ -150,21 +172,38 @@ export class BarnacleScene {
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
-    if (event.pointerId !== this.activePointer || !this.previousPoint || this.barnacle.state === "removed") return;
+    this.updateTime();
+    if (event.pointerId !== this.activePointer || !this.previousPoint || this.inputLocked) return;
     const point = this.pointFromEvent(event);
     this.scraper.position.copyFrom(point);
     const movement = distance(this.previousPoint, point);
 
     if (
       movement >= MIN_SCRAPE_DISTANCE &&
-      movement <= MAX_SAMPLED_DISTANCE &&
-      segmentIntersectsCircle(this.previousPoint, point, this.target, this.targetRadius)
+      movement <= MAX_SAMPLED_DISTANCE
     ) {
-      const result = damageBarnacle(this.barnacle, movement * DAMAGE_PER_PIXEL);
-      if (result.barnacle !== this.barnacle) {
-        this.barnacle = result.barnacle;
-        this.callbacks.onDamage(Math.round((this.barnacle.hp / this.barnacle.maxHp) * 100));
-        this.drawBarnacle();
+      let onTarget = false;
+      for (const target of this.targets) {
+        if (target.barnacle.state === "removed" && (this.mode === "zen" || this.challenge.elapsed > target.protectedUntil)) continue;
+        if (!segmentIntersectsCircle(this.previousPoint, point, target.point, Math.max(12, target.radius))) continue;
+        onTarget = true;
+        const result = damageBarnacle(target.barnacle, movement * DAMAGE_PER_PIXEL);
+        if (result.barnacle !== target.barnacle) {
+          target.barnacle = result.barnacle;
+          this.drawBarnacle(target);
+        }
+      }
+      if (this.mode === "challenge") {
+        const scale = this.turtle.scale.x;
+        const onShell = Math.hypot((point.x - this.turtle.x) / (235 * scale), (point.y - this.turtleCenterY) / (145 * scale)) <= 1;
+        const oldHealth = this.challenge.health;
+        this.challenge = scrapeShell(this.challenge, onShell ? movement / scale : 0, onTarget);
+        if (this.challenge.health < oldHealth) {
+          this.animal = reactAnimal(this.animal, "hurt");
+          this.callbacks.onAnimalChange(this.animal);
+        }
+        this.publishChallenge();
+        if (this.challenge.status !== "playing") this.stopInput();
       }
     }
     this.previousPoint = point;
@@ -178,21 +217,75 @@ export class BarnacleScene {
   };
 
   private readonly tick = (ticker: { deltaMS: number }): void => {
-    if (this.completed) {
-      this.celebrationElapsed += ticker.deltaMS / 1000;
-      this.turtle.y = -8 - Math.sin(this.celebrationElapsed * 7) * 7;
+    this.updateTime();
+    const seconds = ticker.deltaMS / 1000;
+    this.clock += seconds;
+    const previousReaction = this.animal.reaction;
+    this.animal = advanceAnimal(this.animal, seconds);
+    if (previousReaction !== this.animal.reaction) this.callbacks.onAnimalChange(this.animal);
+    this.turtle.animate(this.animal, this.clock);
+    if (this.animal.reaction === "celebrate") {
+      const lift = Math.min(1, Math.max(0, this.animal.elapsed - 1) / 0.5);
+      this.turtle.y = this.turtleCenterY - lift * (12 + Math.sin(this.clock * 5) * 4) * this.turtle.scale.y;
+      if (!this.completed && celebrationFinished(this.animal)) {
+        this.completed = true;
+        this.callbacks.onComplete();
+      }
       return;
     }
-    if (this.barnacle.state !== "breaking") return;
-    this.detachElapsed += ticker.deltaMS / 1000;
-    this.barnacleView.y += ticker.deltaMS * 0.06;
-    this.drawBarnacle();
-
-    if (this.detachElapsed >= DETACH_SECONDS && !this.completed) {
-      this.barnacle = finishDetachment(this.barnacle);
-      this.completed = true;
-      this.barnacleView.visible = false;
-      this.callbacks.onComplete();
+    if (this.inputLocked) return;
+    let removed = false;
+    for (const target of this.targets) {
+      if (target.barnacle.state !== "breaking") continue;
+      target.detachElapsed += ticker.deltaMS / 1000;
+      target.view.y = target.detachElapsed * 60;
+      if (target.detachElapsed >= DETACH_SECONDS) {
+        target.barnacle = finishDetachment(target.barnacle);
+        target.protectedUntil = this.challenge.elapsed + 0.6;
+        if (this.mode === "challenge") this.challenge = recordRemoval(this.challenge, target.barnacle.id, this.targets.length);
+        removed = true;
+      }
+      this.drawBarnacle(target);
+    }
+    if (!removed) return;
+    const barnacles = this.targets.map((target) => target.barnacle);
+    const progress = rescueProgress(barnacles);
+    this.callbacks.onDamage(100 - progress);
+    this.animal = animalAfterRemoval(this.animal, progress);
+    this.callbacks.onAnimalChange(this.animal);
+    this.publishChallenge();
+    if (isRescueComplete(barnacles)) {
+      this.stopInput();
     }
   };
+
+  private stopInput(): void {
+    this.scraper.visible = false;
+    if (this.activePointer !== null && this.app.canvas.hasPointerCapture(this.activePointer)) {
+      this.app.canvas.releasePointerCapture(this.activePointer);
+    }
+    this.activePointer = null;
+    this.previousPoint = null;
+  }
+
+  private updateTime(): void {
+    if (this.mode === "zen") return;
+    const now = performance.now();
+    this.challenge = advanceChallenge(this.challenge, (now - this.lastTime) / 1000);
+    this.lastTime = now;
+    if (this.challenge.status !== "playing") this.stopInput();
+    this.publishChallenge();
+  }
+
+  private publishChallenge(): void {
+    if (this.mode === "zen") return;
+    const summary = [this.challenge.status, Math.ceil(this.challenge.remaining), this.challenge.health, challengeScore(this.challenge), this.challenge.combo].join(":");
+    if (summary === this.lastSummary) return;
+    this.lastSummary = summary;
+    this.callbacks.onChallengeChange(this.challenge);
+  }
+
+  private get inputLocked(): boolean {
+    return this.animal.reaction === "celebrate" || (this.mode === "challenge" && this.challenge.status !== "playing");
+  }
 }
