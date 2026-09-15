@@ -1,5 +1,9 @@
 # Barnacle Rescue MVP Specification
 
+## Lifecycle status
+
+The MVP baseline is frozen at M1–M9 as of 2026-09-15. M10 final QA/deployment was explicitly skipped by product direction and must not be reported as complete or verified. Formal development continues from the observable behavior in this document; post-MVP scope and delivery slices are tracked in `FORMAL_DEVELOPMENT.md`.
+
 ## Product concept and target experience
 
 Barnacle Rescue is a relaxing 2D desktop-first web game, with touch-compatible input architecture, about cleaning harmful barnacles from a rescued sea turtle. The player should see the turtle move from discomfort to relief and finish each rescue feeling calm, helpful, and rewarded.
@@ -17,7 +21,7 @@ The primary quality bar is a satisfying loop: scrape a barnacle, see it crack an
 
 A stationary pointer and a simple click do not count as scraping.
 
-Three configured levels contain 3, 5, and 7 barnacles, including 0, 1, and 2 hard targets. Hard barnacles have twice the HP and a gray, double-rimmed appearance. Cleaning progress counts fully detached targets, not partial HP damage. Targets crack and detach independently; the result appears after all targets detach and celebration finishes. The app opens at the main menu; Start rescue opens selection with all three rescues available. “Rescue again” resets the current level; “Next rescue” starts the next level and is absent on the final level. “Choose rescue” returns to selection and discards the current run. Completion and unlocks are not persisted yet.
+Three configured levels contain 3, 5, and 7 barnacles, including 0, 1, and 2 hard targets. Hard barnacles have twice the HP and a gray, double-rimmed appearance. Cleaning progress counts fully detached targets, not partial HP damage. Targets crack and detach independently; the result appears after all targets detach and celebration finishes. The app opens at the main menu; Start rescue opens selection with all three rescues available. “Rescue again” resets the current level; “Next rescue” starts the next level and is absent on the final level. “Choose rescue” returns to selection and discards the current run. M9 persists completion summaries while keeping all three MVP rescues available.
 
 Animal feedback is shared across all levels: progress determines persistent mood, each non-final detachment triggers a 1.2-second relief reaction, and the final detachment triggers a two-second celebration before the result. A short status caption accompanies facial and body animation. Replay resets mood and reactions. The selection screen offers Challenge and Zen, defaulting to Challenge on page load. Replay, next rescue and return to selection retain the chosen mode; switching mode happens on the selection screen and starts a fresh run.
 
@@ -41,7 +45,11 @@ To allow the player to finish a successful gesture, a freshly detached target's 
 
 Use the same levels and cleaning systems without countdown pressure, failure, aggressive scoring, or combo pressure. Hide those HUD elements and emphasize ambience, subtle motion, and reactions.
 
-M6 implements Zen using the same target configuration, damage, detachment, mood and celebration code as Challenge. It does not advance Challenge time, accumulate bare-shell damage, or record combos/scores. The HUD shows cleaning progress and animal status; result screens omit scores, bonuses and grades. Level cards hide time/health values. Idle motion and gentle relief/celebration provide the current ambience; audio remains a later milestone. Modes are not persisted across reloads yet.
+M6 implements Zen using the same target configuration, damage, detachment, mood and celebration code as Challenge. It does not advance Challenge time, accumulate bare-shell damage, or record combos/scores. The HUD shows cleaning progress and animal status; result screens omit scores, bonuses and grades. Level cards hide time/health values. Idle motion and gentle relief/celebration provide the base ambience; M8 adds procedural audio feedback. M9 restores the last selected mode across reloads.
+
+M8 adds restrained procedural feedback without changing the shared cleaning rules: accepted target scrapes briefly wobble the target and play a quiet, rate-limited scrape cue; the first crack emits a ring and crack cue; detachment emits short-lived fragments and a detach cue; and final completion adds sparkles and a two-note celebration cue. A session-level sound control is available from every screen and defaults off until the player opts in. Browser autoplay policy is respected by creating or resuming audio only after a gameplay pointer gesture. Reduced-motion preference lowers particle counts and disables target wobble; final asset-backed audio and manual volume tuning remain future polish.
+
+M9 stores one versioned local save containing sound enabled, the last selected mode, Zen completion by level, and the best Challenge score and grade by level. Level cards show the saved summaries, but all three MVP levels remain available. Failed or abandoned runs do not change completion records. Missing, malformed, unsupported-version, duplicate, or out-of-range data falls back to safe defaults; unavailable or full browser storage never blocks gameplay. Active runs are intentionally not resumed.
 
 ## MVP scope
 

@@ -1,10 +1,55 @@
 import { expect, test, type Page } from "@playwright/test";
 import { levels, type LevelConfig } from "../../src/levels/levels";
+import { SAVE_KEY } from "../../src/state/persistence";
 
 async function openSelection(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Start rescue" }).click();
 }
+
+test("sound can be toggled without resetting a run and stays selected during navigation", async ({ page }) => {
+  await page.goto("/");
+  const enable = page.getByRole("button", { name: "Turn sound on" });
+  await expect(enable).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("button", { name: "Start rescue" }).click();
+  await expect(page.getByRole("button", { name: "Turn sound on" })).toBeVisible();
+  await page.getByRole("button", { name: /Gentle Start/ }).click();
+  await scrape(page, 0);
+  await expect(page.getByTestId("progress")).toHaveText("33%");
+  await page.getByRole("button", { name: "Turn sound on" }).click();
+  await expect(page.locator("canvas")).toHaveCount(1);
+  await expect(page.getByTestId("progress")).toHaveText("33%");
+  await page.getByRole("button", { name: "Choose rescue", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Mute sound" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("settings and a successful completion restore after reload", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Turn sound on" }).click();
+  await page.getByRole("button", { name: "Start rescue" }).click();
+  await page.getByRole("button", { name: "Zen", exact: true }).click();
+  await page.getByRole("button", { name: /Gentle Start/ }).click();
+  for (let index = 0; index < levels[0].barnacleCount; index += 1) await scrape(page, index);
+  await expect(page.getByTestId("rescue-complete")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Mute sound" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Start rescue" }).click();
+  await expect(page.getByRole("button", { name: "Zen", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("level-progress-1")).toHaveText("Zen complete");
+});
+
+test("malformed and old saves safely restore defaults", async ({ page }) => {
+  await page.goto("/");
+  for (const serialized of ["{", JSON.stringify({ version: 0, settings: { soundEnabled: true, mode: "zen" }, completions: [] })]) {
+    await page.evaluate(([key, value]) => localStorage.setItem(key, value), [SAVE_KEY, serialized]);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Turn sound on" })).toHaveAttribute("aria-pressed", "false");
+    await page.getByRole("button", { name: "Start rescue" }).click();
+    await expect(page.getByRole("button", { name: "Challenge", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Main menu", exact: true }).click();
+  }
+});
 
 for (const width of [1280, 320]) {
   test(`main menu, instructions and return navigation (${width}px)`, async ({ page }, testInfo) => {
@@ -66,37 +111,43 @@ for (const width of [1280, 320]) {
     await expect(page.getByTestId("animal-status")).toHaveAttribute("data-reaction", "idle");
     await expect(page.getByTestId("progress")).toHaveText("0%");
     for (const level of levels) {
+      if (level.id > 1) {
+        await openSelection(page);
+        await page.getByRole("button", { name: "Zen", exact: true }).click();
+        await page.getByRole("button", { name: new RegExp(level.name) }).click();
+      }
       await expect(page.getByTestId("level-title")).toContainText(`Zen · ${level.name}`);
       for (const id of ["timer", "health", "score", "combo", "grade"]) await expect(page.getByTestId(id)).toHaveCount(0);
-      if (level.id === 3) await page.screenshot({ path: testInfo.outputPath("zen.png"), fullPage: true });
+      if (level.id === 3) {
+        await page.screenshot({ path: testInfo.outputPath("zen.png"), fullPage: true });
+      }
       for (let index = 0; index < level.barnacleCount; index += 1) await scrape(page, index, level);
       await expect(page.getByTestId("rescue-complete")).toBeVisible();
       await expect(page.getByTestId("rescue-complete")).not.toContainText(/Score|Grade|bonus/);
-      if (level.id < 3) await page.getByRole("button", { name: "Next rescue" }).click();
     }
     await page.getByRole("button", { name: "Rescue again" }).click();
     await expect(page.getByTestId("level-title")).toContainText("Zen · Full Rescue");
     await expect(page.getByTestId("progress")).toHaveText("0%");
     await expect(page.getByTestId("animal-status")).toHaveAttribute("data-mood", "sad");
-    await page.getByRole("button", { name: "Choose rescue", exact: true }).click();
-    await expect(zen).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "Challenge", exact: true }).click();
-    await page.getByRole("button", { name: /Gentle Start/ }).click();
-    await expect(page.locator("canvas")).toBeVisible();
-    await expect(page.getByTestId("health")).toHaveText("100");
-    await expect(page.getByTestId("score")).toHaveText("0");
-    await page.clock.fastForward(76000);
-    await expect(page.getByTestId("rescue-failed")).toBeVisible();
-    await page.getByTestId("rescue-failed").getByRole("button", { name: "Choose rescue" }).click();
-    await zen.click();
-    await page.getByRole("button", { name: /Gentle Start/ }).click();
-    await expect(page.getByTestId("rescue-failed")).toHaveCount(0);
-    await expect(page.getByTestId("progress")).toHaveText("0%");
-    await expect(page.locator("canvas")).toHaveCount(1);
-    await scrape(page, 0);
-    await expect(page.getByTestId("progress")).toHaveText("33%");
   });
 }
+
+test("a failed Challenge run can return to selection and start fresh in Zen", async ({ page }) => {
+  await page.clock.install();
+  await openSelection(page);
+  await page.getByRole("button", { name: /Gentle Start/ }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.getByTestId("health")).toHaveText("100");
+  await page.clock.fastForward(76000);
+  await expect(page.getByTestId("rescue-failed")).toBeVisible();
+  await page.getByTestId("rescue-failed").getByRole("button", { name: "Choose rescue" }).click();
+  await page.getByRole("button", { name: "Zen", exact: true }).click();
+  await page.getByRole("button", { name: /Gentle Start/ }).click();
+  await expect(page.getByTestId("rescue-failed")).toHaveCount(0);
+  await expect(page.getByTestId("progress")).toHaveText("0%");
+  await scrape(page, 0);
+  await expect(page.getByTestId("progress")).toHaveText("33%");
+});
 
 async function targetPoint(page: Page, index: number, level: LevelConfig = levels[0]) {
   const canvas = page.getByRole("application", { name: "Sea turtle rescue area" });
@@ -237,7 +288,9 @@ for (const width of [1280, 320]) {
       await expect(page.getByTestId("progress")).toHaveText("0%");
       await expect(page.getByTestId("animal-status")).toHaveAttribute("data-mood", "sad");
       await expect(page.locator("canvas")).toHaveCount(1);
-      if (level.id === 3) await page.screenshot({ path: testInfo.outputPath("full-rescue.png"), fullPage: true });
+      if (level.id === 3) {
+        await page.screenshot({ path: testInfo.outputPath("full-rescue.png"), fullPage: true });
+      }
       for (let index = 0; index < level.barnacleCount; index += 1) {
         await scrape(page, index, level);
         await expect(page.getByTestId("progress")).toHaveText(`${Math.round((index + 1) / level.barnacleCount * 100)}%`);

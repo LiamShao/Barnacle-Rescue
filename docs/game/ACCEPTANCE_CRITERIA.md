@@ -1,5 +1,9 @@
 # MVP Acceptance Criteria
 
+## Lifecycle status
+
+The accepted development baseline contains M1–M9. M10 final QA/deployment was skipped by explicit product direction on 2026-09-15, so the project has entered formal development without a final QA or deployment sign-off. The verification policy below remains regression coverage for all subsequent work.
+
 ## M1: first playable vertical slice
 
 - Given the development app starts, when the game route loads, then a sea turtle, one barnacle, and a scraper are visible without critical runtime errors.
@@ -13,7 +17,7 @@
 
 ## Complete MVP behavior
 
-Current implemented scope: M1–M7 core scraping, independent normal/hard targets, animal mood/reactions, three configured levels, Challenge, Zen and the main-menu/navigation flow. Choose a mode and any level, replay it, advance after success, or return to selection/home. Challenge shows countdown, health, earned score and combo; expiry/zero health fail without a grade. Successful completion adds the time bonus and grades against configured par score. Zen shares cleaning and reactions without timing, health loss, failure, scoring or grading. Audio, further feedback polish, persistence and final QA/deployment remain future work.
+Current implemented scope: M1–M9 core scraping, independent normal/hard targets, animal mood/reactions, three configured levels, Challenge, Zen, the main-menu/navigation flow, procedural gameplay feedback/audio, and local settings/completion persistence. Choose a mode and any level, replay it, advance after success, or return to selection/home. Challenge shows countdown, health, earned score and combo; expiry/zero health fail without a grade. Successful completion adds the time bonus and grades against configured par score. Zen shares cleaning and reactions without timing, health loss, failure, scoring or grading. Asset-backed audio/final feedback tuning remain formal-development work; final QA/deployment were skipped rather than completed.
 
 - Given a configured normal or hard barnacle, when scraped, then its own HP/tuning drives the same intact → cracked → breaking → removed lifecycle.
 - Given any of the three level configurations, when a run starts, then count, type mix, HP, size, timer, health, and valid placements come from configuration rather than component branches.
@@ -24,8 +28,15 @@ Current implemented scope: M1–M7 core scraping, independent normal/hard target
 - Given a result, when Replay or Next Level is selected, then a fresh valid run starts with no stale timers/reactions.
 - Given valid local progress/settings exist, when the app reloads, then they restore; given invalid or old data, then safe defaults load without crashing.
 - Given desktop and representative touch viewport sizes, when playing and navigating, then controls remain reachable and the gameplay area does not sit under the HUD.
+- Given accepted scraping, cracking, detachment, and final completion events, then restrained visual/audio feedback fires with those events without changing damage, input, or completion rules.
+- Given sound is disabled, when navigating or continuing the current run, then cues remain muted and gameplay progress is not reset.
+- Given reduced motion is preferred, when gameplay feedback fires, then particle counts are reduced and target wobble is omitted.
 
 ## Verification policy
+
+M9 deterministic tests validate defaults, valid round trips, malformed/old/out-of-range data, unavailable storage, Zen completion and Challenge best-result retention. Browser coverage completes a rescue, reloads, and verifies restored sound/mode settings and the visible completion summary; invalid and old payloads restore defaults without preventing navigation. Active run state is not persisted.
+
+M8 browser coverage verifies that the sound control retains its session state across screens and can change during a run without remounting the canvas or resetting progress. Existing removal/replay coverage guards against feedback changing completion behavior or leaking a second canvas across runs. Particle timing, synthesized cue quality, actual mute audibility, reduced-motion feel and device autoplay behavior still require manual inspection because canvas pixels and audio output are not asserted by the browser suite.
 
 M7 browser coverage verifies initial main-menu focus, expandable instructions, absence of a game scene while in menus, accessible cleaning progress, return from an active run and successful result, retained mode and fresh progress after returning. Desktop and 320px layouts are covered. Earlier milestone descriptions refer to historical entry flows; the current entry is Main Menu → combined Mode/Level Select → Game → Result.
 

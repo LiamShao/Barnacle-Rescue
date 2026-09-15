@@ -6,10 +6,11 @@ import { advanceAnimal, animalAfterRemoval, celebrationFinished, createAnimal, r
 import { advanceChallenge, challengeScore, createChallenge, recordRemoval, scrapeShell, type ChallengeState } from "../domain/challenge";
 import { TurtleView } from "./TurtleView";
 import type { GameMode } from "../domain/mode";
+import { AudioFeedback } from "./AudioFeedback";
 
 type SceneCallbacks = {
   onDamage: (remainingPercent: number) => void;
-  onComplete: () => void;
+  onComplete: (challenge: ChallengeState) => void;
   onAnimalChange: (state: AnimalState) => void;
   onChallengeChange: (state: ChallengeState) => void;
 };
@@ -19,11 +20,24 @@ const MAX_SAMPLED_DISTANCE = 36;
 const DAMAGE_PER_PIXEL = 0.72;
 const DETACH_SECONDS = 0.42;
 
+type FeedbackParticle = {
+  view: Graphics;
+  age: number;
+  lifetime: number;
+  velocity: Point;
+  gravity: number;
+  spin: number;
+};
+
 export class BarnacleScene {
   private readonly app = new Application();
   private readonly world = new Container();
   private readonly background = new Graphics();
   private readonly turtle = new TurtleView();
+  private readonly effects = new Container();
+  private readonly audio = new AudioFeedback();
+  private readonly particles: FeedbackParticle[] = [];
+  private readonly reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   private animal = createAnimal();
   private clock = 0;
   private turtleCenterY = 0;
@@ -36,6 +50,7 @@ export class BarnacleScene {
     radius: 42,
     detachElapsed: 0,
     protectedUntil: 0,
+    wobbleElapsed: 0,
     }));
   }
   private readonly scraper = new Graphics();
@@ -71,7 +86,7 @@ export class BarnacleScene {
     this.app.canvas.style.touchAction = "none";
     this.host.appendChild(this.app.canvas);
     this.app.stage.addChild(this.world);
-    this.world.addChild(this.background, this.turtle, ...this.targets.map((target) => target.view), this.scraper);
+    this.world.addChild(this.background, this.turtle, ...this.targets.map((target) => target.view), this.effects, this.scraper);
     this.drawScraper();
     this.layout();
     this.callbacks.onAnimalChange(this.animal);
@@ -89,6 +104,7 @@ export class BarnacleScene {
 
   destroy(): void {
     this.destroyed = true;
+    this.audio.destroy();
     window.removeEventListener("resize", this.layout);
     if (!this.initialized) return;
     const canvas = this.app.canvas;
@@ -98,6 +114,10 @@ export class BarnacleScene {
     canvas.removeEventListener("pointercancel", this.onPointerEnd);
     canvas.removeEventListener("lostpointercapture", this.onPointerEnd);
     this.app.destroy(true, { children: true });
+  }
+
+  setSoundEnabled(enabled: boolean): void {
+    this.audio.setEnabled(enabled);
   }
 
   private readonly layout = (): void => {
@@ -164,6 +184,7 @@ export class BarnacleScene {
   private readonly onPointerDown = (event: PointerEvent): void => {
     this.updateTime();
     if (this.activePointer !== null || this.inputLocked || event.button !== 0) return;
+    void this.audio.unlock().catch(() => undefined);
     this.activePointer = event.pointerId;
     this.previousPoint = this.pointFromEvent(event);
     this.scraper.position.copyFrom(this.previousPoint);
@@ -187,9 +208,20 @@ export class BarnacleScene {
         if (target.barnacle.state === "removed" && (this.mode === "zen" || this.challenge.elapsed > target.protectedUntil)) continue;
         if (!segmentIntersectsCircle(this.previousPoint, point, target.point, Math.max(12, target.radius))) continue;
         onTarget = true;
+        const previousState = target.barnacle.state;
         const result = damageBarnacle(target.barnacle, movement * DAMAGE_PER_PIXEL);
         if (result.barnacle !== target.barnacle) {
           target.barnacle = result.barnacle;
+          target.wobbleElapsed = this.reducedMotion ? 0 : 0.16;
+          this.audio.scrape();
+          if (previousState === "intact" && target.barnacle.state === "cracked") {
+            this.spawnCrackEffect(target.point);
+            this.audio.crack();
+          }
+          if (previousState !== "breaking" && target.barnacle.state === "breaking") {
+            this.spawnFragments(target.point, target.barnacle.type === "hard");
+            this.audio.detach();
+          }
           this.drawBarnacle(target);
         }
       }
@@ -201,6 +233,7 @@ export class BarnacleScene {
         if (this.challenge.health < oldHealth) {
           this.animal = reactAnimal(this.animal, "hurt");
           this.callbacks.onAnimalChange(this.animal);
+          this.audio.hurt();
         }
         this.publishChallenge();
         if (this.challenge.status !== "playing") this.stopInput();
@@ -220,6 +253,7 @@ export class BarnacleScene {
     this.updateTime();
     const seconds = ticker.deltaMS / 1000;
     this.clock += seconds;
+    this.updateFeedback(seconds);
     const previousReaction = this.animal.reaction;
     this.animal = advanceAnimal(this.animal, seconds);
     if (previousReaction !== this.animal.reaction) this.callbacks.onAnimalChange(this.animal);
@@ -229,7 +263,7 @@ export class BarnacleScene {
       this.turtle.y = this.turtleCenterY - lift * (12 + Math.sin(this.clock * 5) * 4) * this.turtle.scale.y;
       if (!this.completed && celebrationFinished(this.animal)) {
         this.completed = true;
-        this.callbacks.onComplete();
+        this.callbacks.onComplete(this.challenge);
       }
       return;
     }
@@ -255,9 +289,77 @@ export class BarnacleScene {
     this.callbacks.onAnimalChange(this.animal);
     this.publishChallenge();
     if (isRescueComplete(barnacles)) {
+      this.spawnCelebration();
+      this.audio.celebrate();
       this.stopInput();
     }
   };
+
+  private spawnCrackEffect(point: Point): void {
+    const view = new Graphics().circle(0, 0, 18).stroke({ color: 0xfff3b4, width: 4, alpha: 0.9 });
+    this.addParticle(view, point, 0.3, { x: 0, y: 0 }, 0, 0);
+  }
+
+  private spawnFragments(point: Point, hard: boolean): void {
+    const count = this.reducedMotion ? 2 : 4;
+    for (let index = 0; index < count; index += 1) {
+      const size = 4 + Math.random() * 5;
+      const view = new Graphics().poly([0, -size, size, size, -size, size]).fill(hard ? 0x9cabbc : 0xe9bd7d);
+      this.addParticle(
+        view,
+        point,
+        0.55 + Math.random() * 0.2,
+        { x: (Math.random() - 0.5) * 115, y: -45 - Math.random() * 65 },
+        210,
+        (Math.random() - 0.5) * 10,
+      );
+    }
+  }
+
+  private spawnCelebration(): void {
+    const count = this.reducedMotion ? 4 : 8;
+    for (let index = 0; index < count; index += 1) {
+      const view = new Graphics().poly([0, -7, 3, -3, 7, 0, 3, 3, 0, 7, -3, 3, -7, 0, -3, -3]).fill({ color: index % 2 ? 0xfff178 : 0xf0fff4, alpha: 0.95 });
+      this.addParticle(
+        view,
+        { x: this.app.screen.width * (0.25 + Math.random() * 0.5), y: this.app.screen.height * (0.35 + Math.random() * 0.25) },
+        0.9 + Math.random() * 0.45,
+        { x: (Math.random() - 0.5) * 55, y: -25 - Math.random() * 55 },
+        35,
+        (Math.random() - 0.5) * 5,
+      );
+    }
+  }
+
+  private addParticle(view: Graphics, point: Point, lifetime: number, velocity: Point, gravity: number, spin: number): void {
+    view.position.copyFrom(point);
+    this.effects.addChild(view);
+    this.particles.push({ view, age: 0, lifetime, velocity, gravity, spin });
+  }
+
+  private updateFeedback(seconds: number): void {
+    for (const target of this.targets) {
+      if (target.wobbleElapsed <= 0) continue;
+      target.wobbleElapsed = Math.max(0, target.wobbleElapsed - seconds);
+      target.view.x = target.wobbleElapsed > 0 ? Math.sin(target.wobbleElapsed * 95) * 2.5 : 0;
+    }
+    for (let index = this.particles.length - 1; index >= 0; index -= 1) {
+      const particle = this.particles[index];
+      particle.age += seconds;
+      if (particle.age >= particle.lifetime) {
+        // Keep expired graphics attached but hidden; the scene destroys them in one safe batch.
+        particle.view.visible = false;
+        this.particles.splice(index, 1);
+        continue;
+      }
+      particle.velocity.y += particle.gravity * seconds;
+      particle.view.x += particle.velocity.x * seconds;
+      particle.view.y += particle.velocity.y * seconds;
+      particle.view.rotation += particle.spin * seconds;
+      particle.view.alpha = Math.max(0, 1 - particle.age / particle.lifetime);
+      if (particle.gravity === 0) particle.view.scale.set(1 + particle.age / particle.lifetime * 0.8);
+    }
+  }
 
   private stopInput(): void {
     this.scraper.visible = false;

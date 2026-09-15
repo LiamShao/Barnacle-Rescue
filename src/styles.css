@@ -8,6 +8,9 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, canvas { -webkit-tap-highlight-color: transparent; }
+.sound-button { min-height: 44px; padding: 8px 16px; border: 1px solid #297679; border-radius: 99px; background: rgb(240 255 245 / 82%); color: #153f46; font: inherit; font-weight: 800; cursor: pointer; }
+.sound-button[aria-pressed="false"] { opacity: 0.72; }
+.sound-button:focus-visible { outline: 3px solid #125465; outline-offset: 4px; }
 
 .app-shell {
   min-height: 100vh;
@@ -71,6 +74,7 @@ h1 { font-size: clamp(1.8rem, 4vw, 3.2rem); color: #125465; }
 .level-option:hover { background: #fff9d8; border-color: #297679; }
 .level-option:focus-visible, .levels-button:focus-visible { outline: 3px solid #125465; outline-offset: 4px; }
 .level-count { margin-top: auto; font-weight: 700; }
+.completion-summary { color: #116b68; font-weight: 800; }
 .levels-button { min-height: 44px; margin-top: 8px; padding: 8px 16px; border: 1px solid #297679; border-radius: 99px; background: #f0fff5; color: #153f46; font: inherit; cursor: pointer; }
 .result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 0 16px; }
 .animal-status { position: absolute; top: 16px; left: 20px; right: 20px; margin: 0; color: #153f46; font-weight: 700; text-align: center; pointer-events: none; }

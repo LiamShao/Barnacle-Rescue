@@ -3,7 +3,16 @@ import { GameViewport } from "./game/GameViewport";
 import { animalDescription, createAnimal } from "./domain/animal";
 import { levels, type LevelConfig } from "./levels/levels";
 import { challengeGrade, challengeScore, createChallenge } from "./domain/challenge";
-import type { GameMode } from "./domain/mode";
+import { loadSave, recordCompletion, withSettings, writeSave, type LevelCompletion, type SaveData } from "./state/persistence";
+
+const levelIds = levels.map((level) => level.id);
+
+function completionLabel(completion: LevelCompletion): string {
+  const details = [];
+  if (completion.zenCompleted) details.push("Zen complete");
+  if (completion.challengeBest) details.push(`Best ${completion.challengeBest.grade} · ${completion.challengeBest.score}`);
+  return details.join(" · ");
+}
 
 export default function App() {
   const [remaining, setRemaining] = useState(100);
@@ -11,7 +20,9 @@ export default function App() {
   const [runId, setRunId] = useState(0);
   const [animal, setAnimal] = useState(createAnimal);
   const [level, setLevel] = useState<LevelConfig | null>(null);
-  const [mode, setMode] = useState<GameMode>("challenge");
+  const [save, setSave] = useState(() => loadSave(window.localStorage, levelIds));
+  const mode = save.settings.mode;
+  const soundEnabled = save.settings.soundEnabled;
   const [atHome, setAtHome] = useState(true);
   const goHome = () => {
     setLevel(null);
@@ -27,15 +38,40 @@ export default function App() {
     setRunId((id) => id + 1);
   };
   const onDamage = useCallback((percent: number) => setRemaining(percent), []);
-  const onComplete = useCallback(() => {
+  const updateSave = useCallback((update: (current: SaveData) => SaveData) => {
+    setSave((current) => {
+      const next = update(current);
+      writeSave(window.localStorage, next);
+      return next;
+    });
+  }, []);
+  const onComplete = useCallback((finalChallenge: typeof challenge) => {
     setRemaining(0);
     setComplete(true);
-  }, []);
+    if (!level) return;
+    const grade = challengeGrade(finalChallenge, level.parScore);
+    updateSave((current) => recordCompletion(
+      current,
+      level.id,
+      mode,
+      mode === "challenge" && grade ? { score: challengeScore(finalChallenge), grade } : undefined,
+    ));
+  }, [level, mode, updateSave]);
+  const soundToggle = (
+    <button
+      className="sound-button"
+      aria-pressed={soundEnabled}
+      aria-label={soundEnabled ? "Mute sound" : "Turn sound on"}
+      onClick={() => updateSave((current) => withSettings(current, { soundEnabled: !current.settings.soundEnabled }))}
+    >
+      {soundEnabled ? "Sound on" : "Sound off"}
+    </button>
+  );
 
   if (atHome) {
     return (
       <main className="app-shell">
-        <header className="hud"><p className="eyebrow">A little care goes a long way</p></header>
+        <header className="hud"><p className="eyebrow">A little care goes a long way</p>{soundToggle}</header>
         <section className="level-select home-menu" aria-labelledby="home-title">
           <span className="home-mark" aria-hidden="true">❋</span>
           <h1 id="home-title">Barnacle Rescue</h1>
@@ -58,25 +94,29 @@ export default function App() {
   if (!level) {
     return (
       <main className="app-shell">
-        <header className="hud"><div><p className="eyebrow">A little care goes a long way</p><h1>Barnacle Rescue</h1></div></header>
+        <header className="hud"><div><p className="eyebrow">A little care goes a long way</p><h1>Barnacle Rescue</h1></div>{soundToggle}</header>
         <section className="level-select" aria-labelledby="level-heading">
           <h2 id="level-heading">Choose a rescue</h2>
           <button className="levels-button" onClick={goHome}>Main menu</button>
           <div className="mode-select" role="group" aria-label="Game mode">
-            <button aria-pressed={mode === "challenge"} onClick={() => setMode("challenge")}>Challenge</button>
-            <button aria-pressed={mode === "zen"} onClick={() => setMode("zen")}>Zen</button>
+            <button aria-pressed={mode === "challenge"} onClick={() => updateSave((current) => withSettings(current, { mode: "challenge" }))}>Challenge</button>
+            <button aria-pressed={mode === "zen"} onClick={() => updateSave((current) => withSettings(current, { mode: "zen" }))}>Zen</button>
           </div>
           <p>{mode === "challenge" ? "Clean every barnacle before time runs out. Scraping bare shell costs health; lift the scraper to move between targets." : "Take your time. No timer, no health loss, no scores. Just gentle scraping and a happier turtle."}</p>
           <div className="level-grid">
-            {levels.map((option, index) => (
-              <button className="level-option" key={option.id} onClick={() => startLevel(option)} autoFocus={index === 0}>
-                <span className="eyebrow">Rescue {option.id}</span>
-                <strong>{option.name}</strong>
-                <span>{option.description}</span>
-                <span className="level-count">{option.barnacleCount} barnacles · {option.hardBarnacleCount} hard</span>
-                {mode === "challenge" && <span>{option.timeLimitSeconds}s · {option.animalHealth} health</span>}
-              </button>
-            ))}
+            {levels.map((option, index) => {
+              const completion = save.completions.find((item) => item.levelId === option.id);
+              return (
+                <button className="level-option" key={option.id} onClick={() => startLevel(option)} autoFocus={index === 0}>
+                  <span className="eyebrow">Rescue {option.id}</span>
+                  <strong>{option.name}</strong>
+                  <span>{option.description}</span>
+                  <span className="level-count">{option.barnacleCount} barnacles · {option.hardBarnacleCount} hard</span>
+                  {mode === "challenge" && <span>{option.timeLimitSeconds}s · {option.animalHealth} health</span>}
+                  {completion && <span className="completion-summary" data-testid={`level-progress-${option.id}`}>{completionLabel(completion)}</span>}
+                </button>
+              );
+            })}
           </div>
         </section>
       </main>
@@ -95,6 +135,7 @@ export default function App() {
           <button className="levels-button" onClick={() => setLevel(null)} autoFocus>Choose rescue</button>
           <button className="levels-button" onClick={goHome}>Main menu</button>
         </div>
+        {soundToggle}
         <div className="progress-block" aria-live="polite">
           <span>{complete ? "Clean!" : "Cleaning progress"}</span>
           <strong data-testid="progress">{100 - remaining}%</strong>
@@ -111,7 +152,7 @@ export default function App() {
       </header>
 
       <section className={`rescue-card ${resultVisible ? "is-complete" : ""}`}>
-        <GameViewport key={runId} mode={mode} level={level} onDamage={onDamage} onComplete={onComplete} onAnimalChange={setAnimal} onChallengeChange={setChallenge} />
+        <GameViewport key={runId} mode={mode} level={level} soundEnabled={soundEnabled} onDamage={onDamage} onComplete={onComplete} onAnimalChange={setAnimal} onChallengeChange={setChallenge} />
         {!resultVisible && <p className="animal-status" role="status" data-testid="animal-status" data-mood={animal.mood} data-reaction={animal.reaction}>{animalDescription(animal)}</p>}
         <p className="instruction">{mode === "challenge" ? "Scrape barnacles, not bare shell. Lift to switch targets. Gray shells take more scraping." : "Gently drag back and forth over each barnacle. There is no rush."}</p>
         {resultVisible && (
