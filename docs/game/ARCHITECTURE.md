@@ -16,6 +16,8 @@ React application
 
 React owns routes/screens, accessible controls, overlays, and ordinary CSS layout. PixiJS owns the turtle scene, scraper, barnacle visuals, pointer sampling, collision, and gameplay feedback. Do not mirror frame-by-frame render state through React.
 
+D1 keeps an immediately playable vector scene as the loading and error fallback, then asynchronously applies raster textures for the ocean, turtle, targets, and scraper. Texture dimensions and transparency are presentation-only: configured design coordinates, circular target hit areas, scraper sampling, and all domain state remain unchanged. Procedural face/reaction and damage overlays sit above the raster bases.
+
 ## State and data
 
 - Keep immutable level definitions in configuration, separate from per-run state.

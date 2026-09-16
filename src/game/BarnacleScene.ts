@@ -1,4 +1,4 @@
-import { Application, Container, Graphics } from "pixi.js";
+import { Application, Assets, Container, Graphics, Sprite, Texture } from "pixi.js";
 import { createBarnacle, damageBarnacle, finishDetachment, isRescueComplete, rescueProgress } from "../domain/barnacle";
 import { levelBarnacles, type LevelConfig } from "../levels/levels";
 import { distance, segmentIntersectsCircle, type Point } from "../domain/geometry";
@@ -20,6 +20,13 @@ const MAX_SAMPLED_DISTANCE = 36;
 const DAMAGE_PER_PIXEL = 0.72;
 const DETACH_SECONDS = 0.42;
 
+const SCENE_ASSETS = {
+  background: "/assets/game/background_shallow_ocean.png",
+  turtle: "/assets/game/turtle_body_base_v2.png",
+  barnacle: "/assets/game/barnacle_normal_intact.png",
+  scraper: "/assets/game/scraper_base.png",
+} as const;
+
 type FeedbackParticle = {
   view: Graphics;
   age: number;
@@ -32,7 +39,9 @@ type FeedbackParticle = {
 export class BarnacleScene {
   private readonly app = new Application();
   private readonly world = new Container();
-  private readonly background = new Graphics();
+  private readonly background = new Container();
+  private readonly backgroundFallback = new Graphics();
+  private readonly backgroundAsset = new Sprite();
   private readonly turtle = new TurtleView();
   private readonly effects = new Container();
   private readonly audio = new AudioFeedback();
@@ -45,7 +54,9 @@ export class BarnacleScene {
   private createTargets(level: LevelConfig) {
     return levelBarnacles(level).map((config) => ({
     barnacle: createBarnacle(config),
-    view: new Graphics(),
+    view: new Container(),
+    asset: new Sprite(),
+    overlay: new Graphics(),
     point: { x: 0, y: 0 },
     radius: 42,
     detachElapsed: 0,
@@ -53,7 +64,9 @@ export class BarnacleScene {
     wobbleElapsed: 0,
     }));
   }
-  private readonly scraper = new Graphics();
+  private readonly scraper = new Container();
+  private readonly scraperFallback = new Graphics();
+  private readonly scraperAsset = new Sprite();
   private activePointer: number | null = null;
   private previousPoint: Point | null = null;
   private completed = false;
@@ -85,6 +98,9 @@ export class BarnacleScene {
     this.app.canvas.setAttribute("role", "application");
     this.app.canvas.style.touchAction = "none";
     this.host.appendChild(this.app.canvas);
+    this.background.addChild(this.backgroundFallback, this.backgroundAsset);
+    for (const target of this.targets) target.view.addChild(target.asset, target.overlay);
+    this.scraper.addChild(this.scraperFallback, this.scraperAsset);
     this.app.stage.addChild(this.world);
     this.world.addChild(this.background, this.turtle, ...this.targets.map((target) => target.view), this.effects, this.scraper);
     this.drawScraper();
@@ -100,6 +116,7 @@ export class BarnacleScene {
     this.app.canvas.addEventListener("lostpointercapture", this.onPointerEnd);
     window.addEventListener("resize", this.layout);
     this.app.ticker.add(this.tick);
+    void this.loadAssets();
   }
 
   destroy(): void {
@@ -125,9 +142,14 @@ export class BarnacleScene {
     const height = this.app.screen.height;
     if (!width || !height) return;
 
-    this.background.clear().rect(0, 0, width, height).fill({ color: 0x8bd4d5 });
-    this.background.circle(width * 0.15, height * 0.22, 70).fill({ color: 0xbce9df, alpha: 0.34 });
-    this.background.circle(width * 0.86, height * 0.72, 110).fill({ color: 0x4eb5b5, alpha: 0.25 });
+    this.backgroundFallback.clear().rect(0, 0, width, height).fill({ color: 0x8bd4d5 });
+    this.backgroundFallback.circle(width * 0.15, height * 0.22, 70).fill({ color: 0xbce9df, alpha: 0.34 });
+    this.backgroundFallback.circle(width * 0.86, height * 0.72, 110).fill({ color: 0x4eb5b5, alpha: 0.25 });
+    if (this.backgroundAsset.visible && this.backgroundAsset.texture !== Texture.EMPTY) {
+      const cover = Math.max(width / this.backgroundAsset.texture.width, height / this.backgroundAsset.texture.height);
+      this.backgroundAsset.scale.set(cover);
+      this.backgroundAsset.position.set((width - this.backgroundAsset.texture.width * cover) / 2, (height - this.backgroundAsset.texture.height * cover) / 2);
+    }
 
     const turtleScale = Math.min(width / 820, height / 540);
     const cx = width * 0.5;
@@ -145,18 +167,28 @@ export class BarnacleScene {
   };
 
   private drawBarnacle(target: (typeof this.targets)[number]): void {
-    const { barnacle, view, point } = target;
-    view.clear();
+    const { barnacle, view, asset, overlay, point } = target;
+    overlay.clear();
+    view.visible = barnacle.state !== "removed";
     if (barnacle.state === "removed") return;
 
     const scale = barnacle.state === "breaking" ? Math.max(0, 1 - target.detachElapsed / DETACH_SECONDS) : 1;
     const radius = target.radius * scale;
-    view.circle(point.x, point.y, radius).fill({ color: barnacle.type === "hard" ? 0xaebbc9 : 0xf3d09a }).stroke({ color: 0x8b5b4b, width: 5 });
-    if (barnacle.type === "hard") view.circle(point.x, point.y, radius * 0.78).stroke({ color: 0x50647c, width: 3 });
-    view.circle(point.x, point.y, radius * 0.48).fill({ color: 0x6e4944 });
+    if (asset.visible && asset.texture !== Texture.EMPTY) {
+      asset.anchor.set(0.5);
+      asset.position.copyFrom(point);
+      asset.width = radius * 2.18;
+      asset.height = radius * 2.18;
+      asset.tint = barnacle.type === "hard" ? 0x9aabb8 : 0xffffff;
+      if (barnacle.type === "hard") overlay.circle(point.x, point.y, radius * 0.9).stroke({ color: 0x40596d, width: 4 });
+    } else {
+      overlay.circle(point.x, point.y, radius).fill({ color: barnacle.type === "hard" ? 0xaebbc9 : 0xf3d09a }).stroke({ color: 0x8b5b4b, width: 5 });
+      if (barnacle.type === "hard") overlay.circle(point.x, point.y, radius * 0.78).stroke({ color: 0x50647c, width: 3 });
+      overlay.circle(point.x, point.y, radius * 0.48).fill({ color: 0x6e4944 });
+    }
 
     if (barnacle.state === "cracked" || barnacle.state === "breaking") {
-      view.moveTo(point.x - radius * 0.62, point.y - radius * 0.25)
+      overlay.moveTo(point.x - radius * 0.62, point.y - radius * 0.25)
         .lineTo(point.x - radius * 0.18, point.y + radius * 0.04)
         .lineTo(point.x - radius * 0.38, point.y + radius * 0.55)
         .moveTo(point.x + radius * 0.48, point.y - radius * 0.62)
@@ -167,10 +199,39 @@ export class BarnacleScene {
   }
 
   private drawScraper(): void {
-    this.scraper.clear();
-    this.scraper.roundRect(-7, -2, 14, 72, 7).fill({ color: 0xf8b85c }).stroke({ color: 0x8e552d, width: 3 });
-    this.scraper.roundRect(-28, -11, 56, 18, 4).fill({ color: 0xd9eef0 }).stroke({ color: 0x436b74, width: 3 });
+    this.scraperFallback.clear();
+    this.scraperFallback.roundRect(-7, -2, 14, 72, 7).fill({ color: 0xf8b85c }).stroke({ color: 0x8e552d, width: 3 });
+    this.scraperFallback.roundRect(-28, -11, 56, 18, 4).fill({ color: 0xd9eef0 }).stroke({ color: 0x436b74, width: 3 });
     this.scraper.visible = false;
+  }
+
+  private async loadAssets(): Promise<void> {
+    try {
+      const [background, turtle, barnacle, scraper] = await Promise.all([
+        Assets.load<Texture>(SCENE_ASSETS.background),
+        Assets.load<Texture>(SCENE_ASSETS.turtle),
+        Assets.load<Texture>(SCENE_ASSETS.barnacle),
+        Assets.load<Texture>(SCENE_ASSETS.scraper),
+      ]);
+      if (this.destroyed) return;
+      this.backgroundAsset.texture = background;
+      this.backgroundAsset.visible = true;
+      this.backgroundFallback.visible = false;
+      this.turtle.useAsset(turtle);
+      for (const target of this.targets) {
+        target.asset.texture = barnacle;
+        target.asset.visible = true;
+      }
+      this.scraperAsset.texture = scraper;
+      this.scraperAsset.anchor.set(0.5, 0.92);
+      this.scraperAsset.width = 56;
+      this.scraperAsset.height = 84;
+      this.scraperAsset.visible = true;
+      this.scraperFallback.visible = false;
+      this.layout();
+    } catch {
+      // The vector scene remains fully playable when an asset is unavailable.
+    }
   }
 
   private pointFromEvent(event: PointerEvent): Point {

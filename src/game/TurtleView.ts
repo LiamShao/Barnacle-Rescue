@@ -1,10 +1,12 @@
-import { Container, Graphics } from "pixi.js";
+import { Container, Graphics, Sprite, Texture } from "pixi.js";
 import type { AnimalState } from "../domain/animal";
 
 /** Local design coordinates keep face and flipper animation independent of hit areas. */
 export class TurtleView extends Container {
+  private readonly asset = new Sprite();
   private readonly shell = new Graphics();
   private readonly head = new Container();
+  private readonly headBase = new Graphics();
   private readonly face = new Graphics();
   private readonly bubbles = new Graphics();
   private readonly flippers = [-1, 1].flatMap((side) => [-168, 145].map((x) => {
@@ -16,11 +18,25 @@ export class TurtleView extends Container {
 
   constructor() {
     super();
+    this.asset.anchor.set(0.5);
+    this.asset.width = 700;
+    this.asset.height = 466;
+    this.asset.visible = false;
     this.shell.ellipse(0, 0, 275, 178).fill(0x287c68)
       .ellipse(0, 0, 235, 145).fill(0x58aa76)
       .ellipse(0, 0, 190, 112).stroke({ color: 0x247360, width: 6 });
-    this.head.addChild(new Graphics().ellipse(274, -18, 75, 62).fill(0x64b982), this.face);
+    this.headBase.ellipse(274, -18, 75, 62).fill(0x64b982);
+    this.head.addChild(this.headBase, this.face);
+    this.addChildAt(this.asset, 0);
     this.addChild(this.shell, this.head, this.bubbles);
+  }
+
+  useAsset(texture: Texture): void {
+    this.asset.texture = texture;
+    this.asset.visible = true;
+    this.shell.visible = false;
+    this.headBase.visible = false;
+    for (const { view } of this.flippers) view.visible = false;
   }
 
   animate(state: AnimalState, clock: number): void {
@@ -37,16 +53,22 @@ export class TurtleView extends Container {
     }
     const blink = clock % 4.2 < 0.16 || (celebrating && time >= 0.25 && time < 0.45);
     const softEyes = relief || state.mood === "relaxed" || state.mood === "happy";
+    const assetFace = this.asset.visible;
+    const eyeX = assetFace ? 230 : 301;
+    const eyeY = assetFace ? -2 : -32;
     this.face.clear();
     if (blink || softEyes || hurt) {
-      this.face.moveTo(292, -32).quadraticCurveTo(301, softEyes ? -41 : -30, 310, -32)
+      this.face.moveTo(eyeX - 9, eyeY).quadraticCurveTo(eyeX, softEyes ? eyeY - 9 : eyeY + 2, eyeX + 9, eyeY)
         .stroke({ color: 0x173d43, width: 4 });
     } else {
-      this.face.circle(301, -32, 7).fill(0x173d43);
-      if (state.mood === "sad") this.face.moveTo(289, -47).lineTo(308, -40).stroke({ color: 0x173d43, width: 4 });
+      this.face.circle(eyeX, eyeY, 7).fill(0x173d43);
+      if (state.mood === "sad") this.face.moveTo(eyeX - 12, eyeY - 15).lineTo(eyeX + 7, eyeY - 8).stroke({ color: 0x173d43, width: 4 });
     }
     const curve = hurt || (state.mood === "sad" && !relief) ? -13 : state.mood === "neutral" && !relief ? 6 : 25;
-    this.face.moveTo(303, 7).quadraticCurveTo(326, curve, 343, 4).stroke({ color: 0x173d43, width: 4 });
+    const mouthStartX = assetFace ? 226 : 303;
+    const mouthY = assetFace ? 17 : 7;
+    const mouthWidth = assetFace ? 32 : 40;
+    this.face.moveTo(mouthStartX, mouthY).quadraticCurveTo(mouthStartX + mouthWidth * 0.58, assetFace ? curve + 12 : curve, mouthStartX + mouthWidth, mouthY - 3).stroke({ color: 0x173d43, width: 4 });
     this.bubbles.clear();
     if (relief || (celebrating && time >= 1.2)) {
       const phase = relief ? time / 1.2 : (time - 1.2) / 0.8;

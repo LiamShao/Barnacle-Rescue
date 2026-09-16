@@ -23,6 +23,17 @@ Prototype art may be clean vector-like Pixi graphics or placeholders. Gameplay w
 
 Provide source files at 2× intended display size where practical. Trim transparent bounds consistently, document pivots/hotspots beside imported assets, and never encode gameplay hit areas from irregular transparent pixels.
 
+## D1 implemented asset pipeline
+
+The first production pass uses the generated raster assets in `public/assets/game/`: `background_shallow_ocean.png`, `turtle_body_base_v2.png`, `barnacle_normal_intact.png`, and `scraper_base.png`. Pixi loads them asynchronously after the playable vector scene starts. If any requested texture fails, the complete vector scene remains active and usable. `turtle_body_base.png` is the retained first-generation source candidate; the runtime uses the faceless v2 sprite so mood expressions can remain independent.
+
+- The ocean backdrop uses a centered cover crop and does not define gameplay geometry.
+- The turtle sprite is centered at its texture midpoint and sized to the existing design-coordinate silhouette. Mood eyes and mouth, bubbles, body lift, and reaction timing remain separate procedural layers.
+- The barnacle sprite is centered on each configuration-defined target circle. Hard targets reuse the same texture with a cool tint and an additional dark rim. Cracks and breaking scale remain procedural so visual state cannot diverge from domain HP.
+- The scraper sprite uses pivot `(0.5, 0.92)`; its visible lower blade follows the same pointer/contact sample as the vector fallback. Collision continues to use configured circles and pointer segments, never texture alpha.
+
+These are runtime-ready PNGs rather than layered source art. Dedicated hard/cracked/breaking sprites, authored facial layers, and art-source files remain later visual-polish work.
+
 ## Feedback targets
 
 Ordinary removal: scrape marks/crack cue → small target wobble → fragments and detach/fall → bubbles → turtle relief → optional score text.

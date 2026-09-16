@@ -44,6 +44,12 @@ Acceptance criteria:
 - Given an asset fails to load, when the scene initializes, then the player receives a usable fallback rather than an empty rescue area.
 - Given D1 implementation is complete, then configured typecheck, lint, unit, build, and relevant browser checks pass; manual visual/audio/touch checks are reported separately if executed.
 
+### D1 implementation status — 2026-09-16
+
+The first asset-backed pass is implemented across all three rescues, with Gentle Start as the reference. The shallow-ocean backdrop, turtle body, normal/hard target bases, and scraper load through one Pixi path; target positions, hit areas, damage, reactions, and modes still use the frozen gameplay rules. A failed asset request leaves the original vector scene playable.
+
+Automated verification covers typecheck, lint, 37 deterministic unit tests, production build, desktop/320px gameplay flows, all-level completion, replay/navigation, and explicit asset-load fallback. Desktop and 320px browser screenshots were visually reviewed for target/HUD/instruction visibility. Real-device touch feel, audio listening/autoplay behavior, and final authored hard/cracked/breaking/facial sprite variants remain manual or later-polish risks.
+
 ## Later product decisions
 
 Content expansion, additional animals/environments/tools, progression changes, online features, monetization, and release infrastructure are not implicitly authorized by entering formal development. Define their player-visible behavior and acceptance criteria before implementation.

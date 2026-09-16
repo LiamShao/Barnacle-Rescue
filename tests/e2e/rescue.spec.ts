@@ -7,6 +7,15 @@ async function openSelection(page: Page) {
   await page.getByRole("button", { name: "Start rescue" }).click();
 }
 
+test("the vector rescue remains playable when a production asset fails to load", async ({ page }) => {
+  await page.route("**/assets/game/turtle_body_base_v2.png", (route) => route.abort());
+  await openSelection(page);
+  await page.getByRole("button", { name: /Gentle Start/ }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  await scrape(page, 0);
+  await expect(page.getByTestId("progress")).toHaveText("33%");
+});
+
 test("sound can be toggled without resetting a run and stays selected during navigation", async ({ page }) => {
   await page.goto("/");
   const enable = page.getByRole("button", { name: "Turn sound on" });
