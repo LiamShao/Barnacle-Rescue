@@ -16,6 +16,20 @@ test("the vector rescue remains playable when a production asset fails to load",
   await expect(page.getByTestId("progress")).toHaveText("33%");
 });
 
+test("barnacle types and cracked states use dedicated assets without changing removal rules", async ({ page }) => {
+  const requestedAssets = new Set<string>();
+  await page.route("**/assets/game/barnacle_*.png", async (route) => {
+    requestedAssets.add(new URL(route.request().url()).pathname.split("/").at(-1)!);
+    await route.continue();
+  });
+  await openSelection(page);
+  await page.getByRole("button", { name: /Shell Care/ }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect.poll(() => requestedAssets.size).toBe(4);
+  await scrape(page, 4, levels[1]);
+  await expect(page.getByTestId("progress")).toHaveText("20%");
+});
+
 test("sound can be toggled without resetting a run and stays selected during navigation", async ({ page }) => {
   await page.goto("/");
   const enable = page.getByRole("button", { name: "Turn sound on" });

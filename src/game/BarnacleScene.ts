@@ -23,9 +23,14 @@ const DETACH_SECONDS = 0.42;
 const SCENE_ASSETS = {
   background: "/assets/game/background_shallow_ocean.png",
   turtle: "/assets/game/turtle_body_base_v2.png",
-  barnacle: "/assets/game/barnacle_normal_intact.png",
+  barnacleNormal: "/assets/game/barnacle_normal_intact.png",
+  barnacleNormalCracked: "/assets/game/barnacle_normal_cracked.png",
+  barnacleHard: "/assets/game/barnacle_hard_intact.png",
+  barnacleHardCracked: "/assets/game/barnacle_hard_cracked.png",
   scraper: "/assets/game/scraper_base.png",
 } as const;
+
+type BarnacleTextures = Record<"normal" | "hard", Record<"intact" | "cracked", Texture>>;
 
 type FeedbackParticle = {
   view: Graphics;
@@ -47,6 +52,7 @@ export class BarnacleScene {
   private readonly audio = new AudioFeedback();
   private readonly particles: FeedbackParticle[] = [];
   private readonly reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  private barnacleTextures: BarnacleTextures | null = null;
   private animal = createAnimal();
   private clock = 0;
   private turtleCenterY = 0;
@@ -174,20 +180,23 @@ export class BarnacleScene {
 
     const scale = barnacle.state === "breaking" ? Math.max(0, 1 - target.detachElapsed / DETACH_SECONDS) : 1;
     const radius = target.radius * scale;
-    if (asset.visible && asset.texture !== Texture.EMPTY) {
+    const barnacleTextures = this.barnacleTextures;
+    const usingAsset = asset.visible && barnacleTextures !== null;
+    if (usingAsset) {
+      const textureState = barnacle.state === "intact" ? "intact" : "cracked";
+      asset.texture = barnacleTextures[barnacle.type][textureState];
       asset.anchor.set(0.5);
       asset.position.copyFrom(point);
       asset.width = radius * 2.18;
       asset.height = radius * 2.18;
-      asset.tint = barnacle.type === "hard" ? 0x9aabb8 : 0xffffff;
-      if (barnacle.type === "hard") overlay.circle(point.x, point.y, radius * 0.9).stroke({ color: 0x40596d, width: 4 });
+      asset.tint = 0xffffff;
     } else {
       overlay.circle(point.x, point.y, radius).fill({ color: barnacle.type === "hard" ? 0xaebbc9 : 0xf3d09a }).stroke({ color: 0x8b5b4b, width: 5 });
       if (barnacle.type === "hard") overlay.circle(point.x, point.y, radius * 0.78).stroke({ color: 0x50647c, width: 3 });
       overlay.circle(point.x, point.y, radius * 0.48).fill({ color: 0x6e4944 });
     }
 
-    if (barnacle.state === "cracked" || barnacle.state === "breaking") {
+    if (!usingAsset && (barnacle.state === "cracked" || barnacle.state === "breaking")) {
       overlay.moveTo(point.x - radius * 0.62, point.y - radius * 0.25)
         .lineTo(point.x - radius * 0.18, point.y + radius * 0.04)
         .lineTo(point.x - radius * 0.38, point.y + radius * 0.55)
@@ -207,10 +216,13 @@ export class BarnacleScene {
 
   private async loadAssets(): Promise<void> {
     try {
-      const [background, turtle, barnacle, scraper] = await Promise.all([
+      const [background, turtle, barnacleNormal, barnacleNormalCracked, barnacleHard, barnacleHardCracked, scraper] = await Promise.all([
         Assets.load<Texture>(SCENE_ASSETS.background),
         Assets.load<Texture>(SCENE_ASSETS.turtle),
-        Assets.load<Texture>(SCENE_ASSETS.barnacle),
+        Assets.load<Texture>(SCENE_ASSETS.barnacleNormal),
+        Assets.load<Texture>(SCENE_ASSETS.barnacleNormalCracked),
+        Assets.load<Texture>(SCENE_ASSETS.barnacleHard),
+        Assets.load<Texture>(SCENE_ASSETS.barnacleHardCracked),
         Assets.load<Texture>(SCENE_ASSETS.scraper),
       ]);
       if (this.destroyed) return;
@@ -218,8 +230,11 @@ export class BarnacleScene {
       this.backgroundAsset.visible = true;
       this.backgroundFallback.visible = false;
       this.turtle.useAsset(turtle);
+      this.barnacleTextures = {
+        normal: { intact: barnacleNormal, cracked: barnacleNormalCracked },
+        hard: { intact: barnacleHard, cracked: barnacleHardCracked },
+      };
       for (const target of this.targets) {
-        target.asset.texture = barnacle;
         target.asset.visible = true;
       }
       this.scraperAsset.texture = scraper;

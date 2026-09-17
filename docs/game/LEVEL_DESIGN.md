@@ -49,3 +49,13 @@ M6 exposes the same three configurations in both modes. Zen hides the time/healt
 ## Difficulty rules
 
 Increase count, HP, smaller-but-accessible size, hard ratio, and timer pressure. Do not introduce level-specific code, new tools, currencies, or unrelated hazards merely to create difficulty.
+
+## Formal-development constrained random placement
+
+The frozen MVP levels retain their authored shell placements. Formal-development rescues will be able to generate barnacles across any animal-specific eligible body region, including back or shell, head/neck, individual limbs or flippers, and tail. Random placement is constrained content generation, not arbitrary placement over image pixels.
+
+Each animal view defines named cleanable regions, spawn regions, exclusion regions, capacity, selection weight, minimum target spacing, and deterministic fallback anchors. Head regions must exclude eyes, mouth, nostrils, wounds, silhouette edges, and any area where scraping would be visually unsafe or hard to control. A target must be fully contained inside its spawn region, outside every exclusion, reachable at supported touch sizes, and non-overlapping with every other target.
+
+Each rescue defines a target count, normal/hard mix, size range, eligible region set, and minimum/maximum number of affected regions. Generation uses an injectable seed. The same content definition and seed must produce the same selected regions, target types, sizes, coordinates, and IDs. Different seeds may vary the distribution without changing configured totals or violating difficulty and safety constraints.
+
+The generator uses bounded sampling attempts. If sampling cannot place a valid target, it uses authored deterministic fallback anchors or rejects the invalid rescue configuration before gameplay begins; it must never loop indefinitely or silently place an unreachable target. Automated coverage exercises known seeds for every eligible region and edge case. Replay seed behavior remains a product decision to confirm before this system ships, especially because layout variation can affect Challenge score comparability.
