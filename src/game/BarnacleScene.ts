@@ -1,6 +1,7 @@
 import { Application, Assets, Container, Graphics, Sprite, Texture } from "pixi.js";
 import { createBarnacle, damageBarnacle, finishDetachment, isRescueComplete, rescueProgress } from "../domain/barnacle";
-import { levelBarnacles, type LevelConfig } from "../levels/levels";
+import { rescueBarnacles } from "../levels/levels";
+import type { ResolvedRescueContent } from "../levels/rescueDefinitions";
 import { distance, segmentIntersectsCircle, type Point } from "../domain/geometry";
 import { advanceAnimal, animalAfterRemoval, celebrationFinished, createAnimal, reactAnimal, type AnimalState } from "../domain/animal";
 import { advanceChallenge, challengeScore, createChallenge, recordRemoval, scrapeShell, type ChallengeState } from "../domain/challenge";
@@ -21,8 +22,6 @@ const DAMAGE_PER_PIXEL = 0.72;
 const DETACH_SECONDS = 0.42;
 
 const SCENE_ASSETS = {
-  background: "/assets/game/background_shallow_ocean.png",
-  turtle: "/assets/game/turtle_body_base_v2.png",
   barnacleNormal: "/assets/game/barnacle_normal_intact.png",
   barnacleNormalCracked: "/assets/game/barnacle_normal_cracked.png",
   barnacleHard: "/assets/game/barnacle_hard_intact.png",
@@ -57,8 +56,8 @@ export class BarnacleScene {
   private clock = 0;
   private turtleCenterY = 0;
   private readonly targets;
-  private createTargets(level: LevelConfig) {
-    return levelBarnacles(level).map((config) => ({
+  private createTargets(rescue: ResolvedRescueContent["rescue"]) {
+    return rescueBarnacles(rescue).map((config) => ({
     barnacle: createBarnacle(config),
     view: new Container(),
     asset: new Sprite(),
@@ -85,11 +84,11 @@ export class BarnacleScene {
   constructor(
     private readonly host: HTMLDivElement,
     private readonly callbacks: SceneCallbacks,
-    level: LevelConfig,
+    private readonly content: ResolvedRescueContent,
     private readonly mode: GameMode,
   ) {
-    this.targets = this.createTargets(level);
-    this.challenge = createChallenge(level);
+    this.targets = this.createTargets(content.rescue);
+    this.challenge = createChallenge(content.rescue.challenge);
   }
 
   async start(): Promise<void> {
@@ -217,8 +216,8 @@ export class BarnacleScene {
   private async loadAssets(): Promise<void> {
     try {
       const [background, turtle, barnacleNormal, barnacleNormalCracked, barnacleHard, barnacleHardCracked, scraper] = await Promise.all([
-        Assets.load<Texture>(SCENE_ASSETS.background),
-        Assets.load<Texture>(SCENE_ASSETS.turtle),
+        Assets.load<Texture>(this.content.environment.background.src),
+        Assets.load<Texture>(this.content.stages[0].bodyView.asset.src),
         Assets.load<Texture>(SCENE_ASSETS.barnacleNormal),
         Assets.load<Texture>(SCENE_ASSETS.barnacleNormalCracked),
         Assets.load<Texture>(SCENE_ASSETS.barnacleHard),

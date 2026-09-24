@@ -4,11 +4,11 @@
 
 This roadmap begins after the frozen M1–M9 MVP baseline. M10 remains explicitly skipped and must not be represented as completed. `FORMAL_DEVELOPMENT.md` defines the inherited baseline and current D1 status; this document tracks planned formal-development work.
 
-Last planned: 2026-09-17.
+Last updated: 2026-09-24.
 
 ## Product direction
 
-Formal development expands Barnacle Rescue along three independent, configuration-driven dimensions:
+Formal development expands Barnacle Rescue along four independent, configuration-driven dimensions:
 
 - multiple cleanable body areas within one rescue;
 - constrained random barnacle distribution across eligible body areas;
@@ -17,16 +17,16 @@ Formal development expands Barnacle Rescue along three independent, configuratio
 
 The recommended first implementation uses discrete authored 2D views rather than free 3D rotation. A rescue may move between views such as dorsal, side, flipper, or underside while preserving one continuous run. Within those views, barnacles may appear on any configured eligible region, including shell/back, limbs or flippers, head/neck, and tail. React owns area navigation and accessible status. PixiJS owns the active view, cleanable geometry, generated targets, input, animation, and transient feedback.
 
-Default planning assumptions, to be confirmed by `FD-101` before implementation:
+The player-visible multi-area rules are approved in `MULTI_AREA_RESCUE_SPEC.md`. The resulting planning constraints are:
 
 - body areas follow a guided linear order;
-- every configured stage is required unless explicitly marked optional in a later product decision;
-- each run layout is generated from a seed; automated checks may inject a known seed, while replay/retry seed reuse remains an explicit decision in `FD-101`;
+- every configured stage is required; optional or skippable stages require a later product decision;
+- each run layout is generated from a seed; replay/retry reuses it, while selection and next-rescue starts create a fresh seed;
 - total target count and normal/hard mix remain rescue-configured even when affected regions and coordinates vary;
 - random placement uses authored spawn regions and exclusions rather than arbitrary texture pixels;
 - overall progress counts removed targets across all required stages;
 - animal mood derives from overall rescue progress;
-- Challenge timing pauses during non-interactive view transitions only;
+- Challenge timing pauses during non-interactive view transitions only, while combo expiry receives no transition grace;
 - active runs are not persisted;
 - the first public shape remains a local-only single-player web game without accounts, multiplayer, shops, currency, or inventory.
 
@@ -76,35 +76,55 @@ Real-device touch feel, production audio listening/autoplay behavior, and option
 
 ## FD1: multi-area specification and compatibility foundation
 
-- [ ] **FD-101 — Approve the multi-area rescue behavior specification (`S`)**
+- [x] **FD-101 — Approve the multi-area rescue behavior specification (`S`)**
   - Define `Rescue`, `Stage`, `BodyView`, and `CleanableRegion` in player-visible terms.
   - Confirm guided versus freely selectable area order.
   - Confirm required and optional area behavior.
   - Confirm overall progress, transition timing, completion, replay, and abandonment rules.
   - Confirm whether replay/retry reuses the current seed or generates a new case, especially for Challenge fairness.
 
-- [ ] **FD-102 — Define configuration contracts (`M`, depends on FD-101)**
+### FD-101 completion status — 2026-09-24
+
+`MULTI_AREA_RESCUE_SPEC.md` defines the player-visible meaning of rescues, stages, body views, and cleanable regions. The first slice uses required stages in a guided linear order; overall progress is target-weighted across the whole rescue. Challenge state continues across stages, with countdown pause limited to the non-interactive view transition and no added combo grace. Replay and retry recreate the same seeded case, while starting from selection or advancing to another rescue creates a fresh seed. Abandonment and page reload discard the active run, and persistence occurs only after the final required stage succeeds.
+
+- [x] **FD-102 — Define configuration contracts (`M`, depends on FD-101)**
   - Define `RescueDefinition`, `RescueStage`, `AnimalDefinition`, `BodyViewDefinition`, `EnvironmentDefinition`, `SpawnRegion`, `SpawnProfile`, and generated `TargetPlacement`.
   - Keep immutable content definitions separate from per-run state.
   - Make valid animal/environment combinations explicit instead of generating a Cartesian product.
 
-- [ ] **FD-103 — Define cleanable geometry primitives (`M`, depends on FD-101)**
+### FD-102 completion status — 2026-09-24
+
+`src/levels/rescueDefinitions.ts` defines readonly rescue, stage, animal, body-view, environment, cleanable-region, spawn-region, spawn-profile, fixed/generated placement, catalog, and resolved-content contracts. Each rescue explicitly references its supported animal/environment pair and its ordered stages reference only views on that animal. Geometry remains a generic parameter for FD-103, while mutable HP and reaction state remain outside the immutable `TargetPlacement` layout. Focused unit coverage verifies explicit pairing and rejects missing rescue, animal, environment, and body-view references. The current three levels remain on `LevelConfig` until FD-105, so this slice does not change player-visible behavior.
+
+- [x] **FD-103 — Define cleanable geometry primitives (`M`, depends on FD-101)**
   - Support deterministic ellipse, circle, capsule, and polygon regions as needed.
   - Support exclusion regions for eyes, mouth, wounds, UI-obscured areas, and other unsafe surfaces.
   - Define containment and minimum touch-target validation.
   - Give shell/back, each limb or flipper, head/neck, tail, and future animal-specific parts independent region IDs, capacities, and spawn weights.
 
-- [ ] **FD-104 — Define globally stable identifiers (`S`, depends on FD-102)**
+### FD-103 completion status — 2026-09-24
+
+`src/domain/geometry.ts` now defines immutable circle, rotated-ellipse, oriented-capsule, and simple-polygon primitives with deterministic point containment, circular-footprint containment, exclusion intersection, and minimum-hit-radius placement checks. Degenerate and non-finite geometry is rejected. `CleanableRegion` and `SpawnRegion` default to this concrete union while retaining independent IDs, capacity, weight, exclusions, and fallback anchors. Focused unit coverage exercises boundaries, rotation, every primitive, exclusions, touch reachability, and invalid definitions. Scene integration remains intentionally deferred to FD-106, and the concrete turtle region map remains FD-201.
+
+- [x] **FD-104 — Define globally stable identifiers (`S`, depends on FD-102)**
   - Give rescues, stages, views, regions, and targets stable IDs independent of display names and array positions.
   - Guarantee target uniqueness across the complete rescue.
   - Keep removal and completion idempotent across stage changes.
   - Derive generated target IDs deterministically from rescue seed and generation order without using display coordinates as identity.
 
-- [ ] **FD-105 — Adapt the three current levels to one-stage rescues (`M`, depends on FD-102–104)**
+### FD-104 completion status — 2026-09-24
+
+`src/domain/identifiers.ts` defines branded and scope-qualified IDs for animals, environments, rescues, stages, body views, cleanable regions, spawn regions, and targets. Authored keys are validated independently of display labels and array positions. Generated targets use rescue ID, typed seed, and rescue-global generation order only; replaying a seed reproduces the same IDs without coordinate coupling. Content resolution rejects duplicate authored target IDs across stages, and focused coverage confirms that the existing removal/completion ledger ignores repeated IDs before and after terminal completion. FD-105 now derives the retained numeric save-version-1 IDs from these stable rescue definitions.
+
+- [x] **FD-105 — Adapt the three current levels to one-stage rescues (`M`, depends on FD-102–104)**
   - Represent Gentle Start, Shell Care, and Full Rescue through the new configuration path.
   - Preserve their existing target count, HP, placement, score, time, result, and persistence behavior.
   - Avoid branching on a specific level or animal in the scene.
   - Keep their frozen authored placements through an explicit fixed-placement compatibility mode until random distribution ships in FD2.
+
+### FD-105 completion status — 2026-09-24
+
+Gentle Start, Shell Care, and Full Rescue now resolve as explicit one-stage, fixed-placement `RescueDefinition` content using one configured sea-turtle dorsal view and shallow-ocean environment. React and Pixi consume the resolved content path for selection, target creation, Challenge tuning, and animal/environment assets without branching on a rescue or animal. Counts, type mix, HP, diameter ranges, coordinates, time, health, par scores, replay, next-rescue order, and result behavior remain unchanged. Stable rescue-scoped target IDs replace array-derived runtime IDs. A numeric compatibility projection is derived from the definitions to preserve save-version-1 summaries and existing browser helpers until FD-107. Automated verification covers definition resolution, geometry containment, frozen coordinates, configuration tuning, runtime browser flows, persistence, and asset fallback; real-device touch and difficulty tuning remain unverified.
 
 - [ ] **FD-106 — Replace the hard-coded shell ellipse with configured geometry (`M`, depends on FD-103 and FD-105)**
   - Use the configured cleanable region for bare-body health penalties.
@@ -219,7 +239,7 @@ The recommended reference content is one sea turtle rescue whose barnacles are d
 - Given head, limb/flipper, tail, and shell regions are eligible, when many validated seeds are exercised, then every eligible region can receive a target and no excluded facial or unsafe region ever does.
 - Given placement cannot satisfy every constraint through sampling, when the bounded attempt limit is reached, then deterministic fallback anchors produce a valid layout or reject the configuration before gameplay begins.
 - Given the rescue contains shell and flipper stages, when the shell is fully cleaned, then the shell is marked complete without showing the final result.
-- Given the player enters another body view, when they return to a completed view, then removed targets do not return.
+- Given a completed stage's state is restored during scene lifecycle handling, then its removed targets do not return or count again, even though backward player navigation is not part of the first slice.
 - Given any required stage remains incomplete, when the current stage finishes, then overall progress remains below 100%.
 - Given the last required target is removed, then celebration and total rescue completion occur exactly once.
 - Given a view transition occurs in Challenge, then health, score, combo state, and total run time remain consistent with the specified transition rules.

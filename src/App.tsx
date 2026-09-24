@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
 import { GameViewport } from "./game/GameViewport";
 import { animalDescription, createAnimal } from "./domain/animal";
-import { levels, type LevelConfig } from "./levels/levels";
+import { rescues, type ConfiguredRescue } from "./levels/levels";
 import { challengeGrade, challengeScore, createChallenge } from "./domain/challenge";
 import { loadSave, recordCompletion, withSettings, writeSave, type LevelCompletion, type SaveData } from "./state/persistence";
 
-const levelIds = levels.map((level) => level.id);
+const levelIds = rescues.map((rescue) => rescue.legacyLevelId);
 
 function completionLabel(completion: LevelCompletion): string {
   const details = [];
@@ -19,19 +19,19 @@ export default function App() {
   const [complete, setComplete] = useState(false);
   const [runId, setRunId] = useState(0);
   const [animal, setAnimal] = useState(createAnimal);
-  const [level, setLevel] = useState<LevelConfig | null>(null);
+  const [selectedRescue, setSelectedRescue] = useState<ConfiguredRescue | null>(null);
   const [save, setSave] = useState(() => loadSave(window.localStorage, levelIds));
   const mode = save.settings.mode;
   const soundEnabled = save.settings.soundEnabled;
   const [atHome, setAtHome] = useState(true);
   const goHome = () => {
-    setLevel(null);
+    setSelectedRescue(null);
     setAtHome(true);
   };
-  const [challenge, setChallenge] = useState(() => createChallenge(levels[0]));
-  const startLevel = (next: LevelConfig) => {
-    setLevel(next);
-    setChallenge(createChallenge(next));
+  const [challenge, setChallenge] = useState(() => createChallenge(rescues[0].content.rescue.challenge));
+  const startRescue = (next: ConfiguredRescue) => {
+    setSelectedRescue(next);
+    setChallenge(createChallenge(next.content.rescue.challenge));
     setRemaining(100);
     setComplete(false);
     setAnimal(createAnimal());
@@ -48,15 +48,16 @@ export default function App() {
   const onComplete = useCallback((finalChallenge: typeof challenge) => {
     setRemaining(0);
     setComplete(true);
-    if (!level) return;
-    const grade = challengeGrade(finalChallenge, level.parScore);
+    if (!selectedRescue) return;
+    const definition = selectedRescue.content.rescue;
+    const grade = challengeGrade(finalChallenge, definition.challenge.parScore);
     updateSave((current) => recordCompletion(
       current,
-      level.id,
+      selectedRescue.legacyLevelId,
       mode,
       mode === "challenge" && grade ? { score: challengeScore(finalChallenge), grade } : undefined,
     ));
-  }, [level, mode, updateSave]);
+  }, [selectedRescue, mode, updateSave]);
   const soundToggle = (
     <button
       className="sound-button"
@@ -91,7 +92,7 @@ export default function App() {
     );
   }
 
-  if (!level) {
+  if (!selectedRescue) {
     return (
       <main className="app-shell">
         <header className="hud"><div><p className="eyebrow">A little care goes a long way</p><h1>Barnacle Rescue</h1></div>{soundToggle}</header>
@@ -104,16 +105,17 @@ export default function App() {
           </div>
           <p>{mode === "challenge" ? "Clean every barnacle before time runs out. Scraping bare shell costs health; lift the scraper to move between targets." : "Take your time. No timer, no health loss, no scores. Just gentle scraping and a happier turtle."}</p>
           <div className="level-grid">
-            {levels.map((option, index) => {
-              const completion = save.completions.find((item) => item.levelId === option.id);
+            {rescues.map((option, index) => {
+              const definition = option.content.rescue;
+              const completion = save.completions.find((item) => item.levelId === option.legacyLevelId);
               return (
-                <button className="level-option" key={option.id} onClick={() => startLevel(option)} autoFocus={index === 0}>
-                  <span className="eyebrow">Rescue {option.id}</span>
-                  <strong>{option.name}</strong>
-                  <span>{option.description}</span>
-                  <span className="level-count">{option.barnacleCount} barnacles · {option.hardBarnacleCount} hard</span>
-                  {mode === "challenge" && <span>{option.timeLimitSeconds}s · {option.animalHealth} health</span>}
-                  {completion && <span className="completion-summary" data-testid={`level-progress-${option.id}`}>{completionLabel(completion)}</span>}
+                <button className="level-option" key={definition.id} onClick={() => startRescue(option)} autoFocus={index === 0}>
+                  <span className="eyebrow">Rescue {option.legacyLevelId}</span>
+                  <strong>{definition.name}</strong>
+                  <span>{definition.description}</span>
+                  <span className="level-count">{definition.spawnProfile.targetCount} barnacles · {definition.spawnProfile.hardTargetCount} hard</span>
+                  {mode === "challenge" && <span>{definition.challenge.timeLimitSeconds}s · {definition.challenge.animalHealth} health</span>}
+                  {completion && <span className="completion-summary" data-testid={`level-progress-${option.legacyLevelId}`}>{completionLabel(completion)}</span>}
                 </button>
               );
             })}
@@ -122,7 +124,8 @@ export default function App() {
       </main>
     );
   }
-  const nextLevel = levels[levels.indexOf(level) + 1];
+  const definition = selectedRescue.content.rescue;
+  const nextRescue = rescues[rescues.indexOf(selectedRescue) + 1];
   const failed = mode === "challenge" && (challenge.status === "timeout" || challenge.status === "health");
   const resultVisible = complete || failed;
 
@@ -130,9 +133,9 @@ export default function App() {
     <main className="app-shell">
       <header className="hud">
         <div>
-          <p className="eyebrow" data-testid="level-title">{mode === "challenge" ? "Challenge" : "Zen"} · {level.name} · Rescue {level.id} · {level.barnacleCount} barnacles</p>
+          <p className="eyebrow" data-testid="level-title">{mode === "challenge" ? "Challenge" : "Zen"} · {definition.name} · Rescue {selectedRescue.legacyLevelId} · {definition.spawnProfile.targetCount} barnacles</p>
           <h1>Barnacle Rescue</h1>
-          <button className="levels-button" onClick={() => setLevel(null)} autoFocus>Choose rescue</button>
+          <button className="levels-button" onClick={() => setSelectedRescue(null)} autoFocus>Choose rescue</button>
           <button className="levels-button" onClick={goHome}>Main menu</button>
         </div>
         {soundToggle}
@@ -152,7 +155,7 @@ export default function App() {
       </header>
 
       <section className={`rescue-card ${resultVisible ? "is-complete" : ""}`}>
-        <GameViewport key={runId} mode={mode} level={level} soundEnabled={soundEnabled} onDamage={onDamage} onComplete={onComplete} onAnimalChange={setAnimal} onChallengeChange={setChallenge} />
+        <GameViewport key={runId} mode={mode} content={selectedRescue.content} soundEnabled={soundEnabled} onDamage={onDamage} onComplete={onComplete} onAnimalChange={setAnimal} onChallengeChange={setChallenge} />
         {!resultVisible && <p className="animal-status" role="status" data-testid="animal-status" data-mood={animal.mood} data-reaction={animal.reaction}>{animalDescription(animal)}</p>}
         <p className="instruction">{mode === "challenge" ? "Scrape barnacles, not bare shell. Lift to switch targets. Gray shells take more scraping." : "Gently drag back and forth over each barnacle. There is no rush."}</p>
         {resultVisible && (
@@ -160,13 +163,13 @@ export default function App() {
             <span className="sparkle">✦</span>
             <h2>{failed ? "Let's try again" : "Rescue Complete!"}</h2>
             <p>{failed ? challenge.status === "timeout" ? "Time ran out." : "The turtle needs a rest. Avoid scraping bare shell." : "The turtle is feeling much better."}</p>
-            {mode === "challenge" && <p>Score: {challengeScore(challenge)}{complete && <span data-testid="grade"> · Grade {challengeGrade(challenge, level.parScore)}</span>}</p>}
+            {mode === "challenge" && <p>Score: {challengeScore(challenge)}{complete && <span data-testid="grade"> · Grade {challengeGrade(challenge, definition.challenge.parScore)}</span>}</p>}
             {mode === "challenge" && complete && <p>Time bonus: {Math.floor(challenge.remaining) * 10} · Combo bonus: {challenge.comboBonus}</p>}
-            {complete && !nextLevel && <p>You finished the final rescue.</p>}
+            {complete && !nextRescue && <p>You finished the final rescue.</p>}
             <div className="result-actions">
-              <button className="replay-button" onClick={() => startLevel(level)} autoFocus>Rescue again</button>
-              {complete && nextLevel && <button className="replay-button" onClick={() => startLevel(nextLevel)}>Next rescue</button>}
-              <button className="replay-button" onClick={() => setLevel(null)}>Choose rescue</button>
+              <button className="replay-button" onClick={() => startRescue(selectedRescue)} autoFocus>Rescue again</button>
+              {complete && nextRescue && <button className="replay-button" onClick={() => startRescue(nextRescue)}>Next rescue</button>}
+              <button className="replay-button" onClick={() => setSelectedRescue(null)}>Choose rescue</button>
               <button className="replay-button" onClick={goHome}>Main menu</button>
             </div>
           </div>

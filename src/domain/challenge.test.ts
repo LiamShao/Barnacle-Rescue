@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { levels } from "../levels/levels";
+import { rescues } from "../levels/levels";
 import { advanceChallenge, challengeGrade, challengeScore, createChallenge, recordRemoval, scrapeShell } from "./challenge";
 
 describe("Challenge rules", () => {
+  const challenge = rescues[0].content.rescue.challenge;
+
   it("uses elapsed time, fails at zero and freezes terminal runs", () => {
-    const start = createChallenge(levels[0]);
+    const start = createChallenge(challenge);
     expect(advanceChallenge(start, 0.25).remaining).toBe(74.75);
     const failed = advanceChallenge(start, 100);
     expect(failed.status).toBe("timeout");
@@ -14,7 +16,7 @@ describe("Challenge rules", () => {
     expect(challengeGrade(failed, 750)).toBeNull();
   });
   it("accumulates bare-shell movement, forgives target hits, and fails at zero health", () => {
-    const start = createChallenge(levels[0]);
+    const start = createChallenge(challenge);
     const partial = scrapeShell(start, 79, false);
     expect(partial.health).toBe(100);
     expect(scrapeShell(partial, 1, false).health).toBe(90);
@@ -27,7 +29,7 @@ describe("Challenge rules", () => {
     expect(recordRemoval(failed, "late", 1)).toBe(failed);
   });
   it("counts unique removals, caps combo increments and breaks chains after delay or hurt", () => {
-    const first = recordRemoval(createChallenge(levels[0]), "a", 10);
+    const first = recordRemoval(createChallenge(challenge), "a", 10);
     expect(recordRemoval(first, "a", 10)).toBe(first);
     const second = recordRemoval(advanceChallenge(first, 5), "b", 10);
     expect(second.comboBonus).toBe(10);
@@ -38,7 +40,7 @@ describe("Challenge rules", () => {
     expect(chain.comboBonus).toBe(90);
   });
   it("awards whole-second time bonus only on success and freezes during celebration", () => {
-    let state = advanceChallenge(createChallenge(levels[0]), 10.5);
+    let state = advanceChallenge(createChallenge(challenge), 10.5);
     state = scrapeShell(state, 80, false);
     state = recordRemoval(state, "a", 2);
     expect(challengeScore(state)).toBe(50);
@@ -49,7 +51,7 @@ describe("Challenge rules", () => {
     expect(scrapeShell(state, 1000, false)).toBe(state);
   });
   it.each([[119, "B"], [120, "A"], [144, "S"], [96, "B"], [95, "C"]] as const)("grades score %s against par 120", (score, grade) => {
-    const state = { ...createChallenge(levels[0]), status: "success" as const, remaining: 0, comboBonus: score };
+    const state = { ...createChallenge(challenge), status: "success" as const, remaining: 0, comboBonus: score };
     expect(challengeGrade(state, 120)).toBe(grade);
   });
 });

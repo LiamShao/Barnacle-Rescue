@@ -1,22 +1,19 @@
 # Level Design
 
-All three MVP levels use the same rules and differ only through configuration. Placement data may be authored explicitly but must pass shared constraints.
+All three MVP rescues use the same rules and differ only through configuration. FD-105 represents them as one-stage `RescueDefinition` entries sharing one sea-turtle dorsal view and shallow-ocean environment. Placement data remains explicitly authored and passes shared constraints. A derived numeric compatibility view preserves save-version-1 IDs and browser interaction helpers until FD-107 migrates persistence; it is not the runtime content source.
 
 ```ts
 type BarnacleType = "normal" | "hard";
 
-type LevelConfig = {
-  id: number;
+type RescueDefinition = {
+  id: RescueId;
   name: string;
-  barnacleCount: number;
-  hardBarnacleCount: number;
-  normalBarnacleHp: number;
-  hardBarnacleHp: number;
-  barnacleSizeRange: readonly [number, number];
-  timeLimitSeconds: number;
-  animalHealth: number;
-  parScore: number;
-  placements: readonly { x: number; y: number; diameter: number; type: BarnacleType }[];
+  animalId: AnimalId;
+  environmentId: EnvironmentId;
+  stages: readonly RescueStage[];
+  spawnProfile: SpawnProfile;
+  durability: { normalHp: number; hardHp: number };
+  challenge: { timeLimitSeconds: number; animalHealth: number; parScore: number };
 };
 ```
 
@@ -32,7 +29,7 @@ Zen ignores `timeLimitSeconds` and fail pressure; it does not fork the level or 
 
 These are playtest baselines, not promises. Tune time after measuring typical completion, targeting comfortable Level 1 completion and rising but fair Challenge pressure.
 
-M4 implements these values in `src/levels/levels.ts`. Size ranges refer to diameters in the 820 × 540 design space; domain `size` is the radius. Placements are offsets from the turtle center. Tests verify counts, type mix, unique IDs, increasing total HP, size ranges, containment within the cleanable 235 × 145 shell ellipse, and non-overlapping hit circles at desktop and 320/390-pixel page widths. Hit radius has a 12-pixel minimum for small screens. This is code-verified tuning, not a completed touch or difficulty playtest.
+M4 introduced these values; FD-105 now exposes them from `src/levels/levels.ts` through `RescueDefinition`. Size ranges refer to diameters in the 820 × 540 design space; domain `size` is the radius. Placements are offsets from the turtle center and use stable rescue-scoped target IDs. Tests verify one-stage resolution, counts, type mix, unique IDs, increasing total HP, unchanged authored coordinates, size ranges, configured-geometry containment, and non-overlapping hit circles at desktop and 320/390-pixel page widths. Hit radius has a 12-pixel minimum for small screens. This is code-verified tuning, not a completed touch or difficulty playtest.
 
 All three levels are available from the selection screen. Successful results offer replay, next rescue (levels 1–2), and selection. Level 3 has a final-rescue message and no next button. Failed runs offer replay and selection, without a grade. Returning to selection discards the current run. M5 enables the configured time limit and health in Challenge; unlocking and persistence remain deferred. Initial par scores for grades are 750 / 950 / 1100 for levels 1 / 2 / 3, pending playtesting.
 
@@ -56,6 +53,8 @@ The frozen MVP levels retain their authored shell placements. Formal-development
 
 Each animal view defines named cleanable regions, spawn regions, exclusion regions, capacity, selection weight, minimum target spacing, and deterministic fallback anchors. Head regions must exclude eyes, mouth, nostrils, wounds, silhouette edges, and any area where scraping would be visually unsafe or hard to control. A target must be fully contained inside its spawn region, outside every exclusion, reachable at supported touch sizes, and non-overlapping with every other target.
 
+Cleanable and spawn geometry uses explicit design-coordinate circles, rotated ellipses, oriented capsules, or simple polygons. Region boundaries count as cleanable, while touching an exclusion boundary invalidates a target placement. Placement containment uses the larger of the target's visual radius and configured minimum hit radius, ensuring that the entire reachable touch footprint fits safely. Each spawn region carries its own independent reference, capacity, selection weight, and fallback anchors; the concrete turtle body-region map remains an FD-201 content task.
+
 Each rescue defines a target count, normal/hard mix, size range, eligible region set, and minimum/maximum number of affected regions. Generation uses an injectable seed. The same content definition and seed must produce the same selected regions, target types, sizes, coordinates, and IDs. Different seeds may vary the distribution without changing configured totals or violating difficulty and safety constraints.
 
-The generator uses bounded sampling attempts. If sampling cannot place a valid target, it uses authored deterministic fallback anchors or rejects the invalid rescue configuration before gameplay begins; it must never loop indefinitely or silently place an unreachable target. Automated coverage exercises known seeds for every eligible region and edge case. Replay seed behavior remains a product decision to confirm before this system ships, especially because layout variation can affect Challenge score comparability.
+The generator uses bounded sampling attempts. If sampling cannot place a valid target, it uses authored deterministic fallback anchors or rejects the invalid rescue configuration before gameplay begins; it must never loop indefinitely or silently place an unreachable target. Automated coverage exercises known seeds for every eligible region and edge case. Per `MULTI_AREA_RESCUE_SPEC.md`, replay and failure retry reuse the current seed for a comparable case, while starting from selection or advancing to another rescue creates a fresh seed.

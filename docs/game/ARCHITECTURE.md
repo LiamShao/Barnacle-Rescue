@@ -46,6 +46,16 @@ type Barnacle = {
 
 Derive `cracked` from an HP threshold, enter `breaking` once at zero HP, then mark `removed` after detachment feedback. Removed targets cannot take damage or update progress again.
 
+### Formal-development content contracts
+
+FD-102 introduces immutable definitions in `src/levels/rescueDefinitions.ts`. A `RescueDefinition` explicitly selects one `AnimalDefinition` and one `EnvironmentDefinition`, so supported pairings come from authored rescues rather than an animal/environment Cartesian product. Ordered `RescueStage` entries reference body views owned by that animal. Each stage declares either authored fixed targets for MVP compatibility or eligible spawn regions for later seeded generation.
+
+`BodyViewDefinition` owns cleanable and spawn regions. FD-103 supplies its default `CleanableGeometry` union: circle, rotated ellipse, oriented capsule, or polygon, all in authored design coordinates. Deterministic helpers test points, full circular target footprints, exclusion overlap, and the larger of visual or minimum hit radius. Geometry is never inferred from texture alpha. `SpawnProfile` holds rescue-wide count and placement tuning. `TargetPlacement` represents an immutable generated or authored case layout and deliberately excludes mutable HP, damage state, progress, and reactions; those remain per-run domain state. The resolver checks direct rescue, animal, environment, and body-view references.
+
+FD-104 uses branded, scoped string identifiers from `src/domain/identifiers.ts`. Rescue, animal, and environment keys are explicit authored kebab-case values; stage IDs are scoped by rescue, views by animal, and cleanable/spawn regions by view. Labels and array positions never define content identity. Authored target IDs are rescue-scoped. Generated target IDs use only rescue ID, typed seed, and rescue-global generation order, never display coordinates. Reusing a seed reproduces IDs, and duplicate target IDs are rejected across all fixed stages before content resolves. The existing unique-removal ledger therefore remains idempotent across stage boundaries. Full configuration validation and seeded generation remain assigned to FD-108 and FD-109 respectively.
+
+FD-105 migrates Gentle Start, Shell Care, and Full Rescue to explicit, fixed-placement, one-stage definitions. React selects a `ConfiguredRescue`, resolves its declared animal/environment/view content, and passes that resolved content through `GameViewport` to the Pixi scene. Scene target creation, Challenge tuning, turtle asset, and background asset come from this path without rescue- or animal-specific branches. The numeric level projection is derived from the same definitions only for save-version-1 compatibility and browser test coordinates; FD-107 will replace its persistence role.
+
 ## Input and timing
 
 Use Pointer Events so mouse, pen, and touch share one path. Capture the active pointer during a scrape. Damage depends on sampled movement intersecting a barnacle, with distance/time caps to avoid event-rate exploits and large pointer jumps. Game timers use elapsed time rather than render-frame counts.

@@ -1,4 +1,7 @@
-import type { LevelConfig } from "../levels/levels";
+export type ChallengeConfig = Readonly<{
+  timeLimitSeconds: number;
+  animalHealth: number;
+}>;
 
 export type ChallengeState = {
   status: "playing" | "success" | "timeout" | "health";
@@ -13,9 +16,9 @@ export type ChallengeState = {
   unsafeDistance: number;
 };
 
-export function createChallenge(level: LevelConfig): ChallengeState {
-  return { status: "playing", remaining: level.timeLimitSeconds, health: level.animalHealth,
-    initialHealth: level.animalHealth, removedIds: [], combo: 0, comboBonus: 0,
+export function createChallenge(config: ChallengeConfig): ChallengeState {
+  return { status: "playing", remaining: config.timeLimitSeconds, health: config.animalHealth,
+    initialHealth: config.animalHealth, removedIds: [], combo: 0, comboBonus: 0,
     lastRemovalTime: null, elapsed: 0, unsafeDistance: 0 };
 }
 

@@ -52,4 +52,4 @@ Automated verification covers typecheck, lint, 37 deterministic unit tests, prod
 
 ## Later product decisions
 
-The planned constrained random distribution across animal body regions, multi-area views, environment expansion, and additional animals are tracked in `FORMAL_ROADMAP.md`. Each roadmap slice still requires its player-visible behavior and acceptance criteria to be confirmed before implementation. Additional tools, progression changes, online features, monetization, and release infrastructure are not implicitly authorized by entering formal development.
+The planned constrained random distribution across animal body regions, multi-area views, environment expansion, and additional animals are tracked in `FORMAL_ROADMAP.md`. `MULTI_AREA_RESCUE_SPEC.md` now approves the shared player-visible behavior for the first multi-area rescue; later content slices still require their concrete views, regions, tuning, and acceptance criteria before implementation. Additional tools, progression changes, online features, monetization, and release infrastructure are not implicitly authorized by entering formal development.
