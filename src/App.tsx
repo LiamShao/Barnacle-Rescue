@@ -3,11 +3,14 @@ import { GameViewport } from "./game/GameViewport";
 import { animalDescription, createAnimal } from "./domain/animal";
 import { rescues, type ConfiguredRescue } from "./levels/levels";
 import { challengeGrade, challengeScore, createChallenge } from "./domain/challenge";
-import { loadSave, recordCompletion, withSettings, writeSave, type LevelCompletion, type SaveData } from "./state/persistence";
+import { loadSave, recordCompletion, withSettings, writeSave, type RescueCompletion, type SaveData } from "./state/persistence";
 
-const levelIds = rescues.map((rescue) => rescue.legacyLevelId);
+const saveIdentities = rescues.map((rescue) => ({
+  legacyLevelId: rescue.legacyLevelId,
+  rescueId: rescue.content.rescue.id,
+}));
 
-function completionLabel(completion: LevelCompletion): string {
+function completionLabel(completion: RescueCompletion): string {
   const details = [];
   if (completion.zenCompleted) details.push("Zen complete");
   if (completion.challengeBest) details.push(`Best ${completion.challengeBest.grade} · ${completion.challengeBest.score}`);
@@ -20,7 +23,7 @@ export default function App() {
   const [runId, setRunId] = useState(0);
   const [animal, setAnimal] = useState(createAnimal);
   const [selectedRescue, setSelectedRescue] = useState<ConfiguredRescue | null>(null);
-  const [save, setSave] = useState(() => loadSave(window.localStorage, levelIds));
+  const [save, setSave] = useState(() => loadSave(window.localStorage, saveIdentities));
   const mode = save.settings.mode;
   const soundEnabled = save.settings.soundEnabled;
   const [atHome, setAtHome] = useState(true);
@@ -53,7 +56,7 @@ export default function App() {
     const grade = challengeGrade(finalChallenge, definition.challenge.parScore);
     updateSave((current) => recordCompletion(
       current,
-      selectedRescue.legacyLevelId,
+      definition.id,
       mode,
       mode === "challenge" && grade ? { score: challengeScore(finalChallenge), grade } : undefined,
     ));
@@ -107,7 +110,7 @@ export default function App() {
           <div className="level-grid">
             {rescues.map((option, index) => {
               const definition = option.content.rescue;
-              const completion = save.completions.find((item) => item.levelId === option.legacyLevelId);
+              const completion = save.completions.find((item) => item.rescueId === definition.id);
               return (
                 <button className="level-option" key={definition.id} onClick={() => startRescue(option)} autoFocus={index === 0}>
                   <span className="eyebrow">Rescue {option.legacyLevelId}</span>

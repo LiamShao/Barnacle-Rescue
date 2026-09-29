@@ -28,6 +28,11 @@ export type PolygonGeometry = Readonly<{
 
 export type CleanableGeometry = CircleGeometry | EllipseGeometry | CapsuleGeometry | PolygonGeometry;
 
+export type CleanableSurface = Readonly<{
+  geometry: CleanableGeometry;
+  exclusions: readonly CleanableGeometry[];
+}>;
+
 const EPSILON = 1e-9;
 
 export function distance(a: Point, b: Point): number {
@@ -127,6 +132,11 @@ export function isPointInCleanableRegion(
   if (!isGeometryValid(geometry) || exclusions.some((exclusion) => !isGeometryValid(exclusion))) return false;
   return isPointInGeometry(point, geometry)
     && exclusions.every((exclusion) => !isPointInGeometry(point, exclusion));
+}
+
+/** A body view can expose multiple independently authored cleanable surfaces. */
+export function isPointOnCleanableSurface(point: Point, surfaces: readonly CleanableSurface[]): boolean {
+  return surfaces.some((surface) => isPointInCleanableRegion(point, surface.geometry, surface.exclusions));
 }
 
 /** Uses the larger visual/hit radius so small targets retain a reachable touch area. */

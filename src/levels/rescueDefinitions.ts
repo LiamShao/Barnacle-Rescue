@@ -61,6 +61,7 @@ export type SpawnProfile = Readonly<{
   minimumAffectedRegions: number;
   maximumAffectedRegions: number;
   minimumTargetSpacing: number;
+  minimumTargetHitRadius: number;
   maximumPlacementAttemptsPerTarget: number;
 }>;
 

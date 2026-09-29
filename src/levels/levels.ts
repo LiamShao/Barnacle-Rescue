@@ -17,6 +17,7 @@ import {
   type RescueDefinition,
   type ResolvedRescueContent,
 } from "./rescueDefinitions";
+import { assertValidRescueCatalog } from "./rescueValidation";
 
 type AuthoredRescue = Readonly<{
   legacyLevelId: number;
@@ -162,6 +163,7 @@ function toDefinition(authored: AuthoredRescue): RescueDefinition {
       minimumAffectedRegions: 1,
       maximumAffectedRegions: 1,
       minimumTargetSpacing: 2,
+      minimumTargetHitRadius: 36,
       maximumPlacementAttemptsPerTarget: 20,
     },
     durability: { normalHp: authored.normalHp, hardHp: authored.hardHp },
@@ -176,6 +178,7 @@ function toDefinition(authored: AuthoredRescue): RescueDefinition {
 const definitions = authoredRescues.map(toDefinition);
 
 export const rescueCatalog: RescueCatalog = { animals, environments, rescues: definitions };
+assertValidRescueCatalog(rescueCatalog);
 
 export type ConfiguredRescue = Readonly<{
   legacyLevelId: number;

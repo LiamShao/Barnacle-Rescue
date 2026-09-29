@@ -5,6 +5,7 @@ import {
   isGeometryValid,
   isPointInCleanableRegion,
   isPointInGeometry,
+  isPointOnCleanableSurface,
   isValidTargetPlacement,
   segmentIntersectsCircle,
   type CleanableGeometry,
@@ -80,6 +81,24 @@ describe("cleanable geometry", () => {
     expect(isValidTargetPlacement({ x: 0, y: 0 }, 2, 4, circle, [])).toBe(true);
     expect(isValidTargetPlacement({ x: 7, y: 0 }, 2, 4, circle, [])).toBe(false);
     expect(isValidTargetPlacement({ x: 0, y: 0 }, 2, 4, circle, [exclusion])).toBe(false);
+  });
+
+  it("treats configured cleanable surfaces as a union while honoring exclusions", () => {
+    const surfaces = [
+      {
+        geometry: circle,
+        exclusions: [{ kind: "circle", center: { x: 0, y: 0 }, radius: 2 }],
+      },
+      {
+        geometry: { kind: "circle", center: { x: 30, y: 0 }, radius: 5 },
+        exclusions: [],
+      },
+    ] as const;
+
+    expect(isPointOnCleanableSurface({ x: 8, y: 0 }, surfaces)).toBe(true);
+    expect(isPointOnCleanableSurface({ x: 0, y: 0 }, surfaces)).toBe(false);
+    expect(isPointOnCleanableSurface({ x: 30, y: 0 }, surfaces)).toBe(true);
+    expect(isPointOnCleanableSurface({ x: 20, y: 0 }, surfaces)).toBe(false);
   });
 
   it("rejects degenerate or non-finite definitions before use", () => {

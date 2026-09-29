@@ -62,9 +62,45 @@ test("settings and a successful completion restore after reload", async ({ page 
   await expect(page.getByTestId("level-progress-1")).toHaveText("Zen complete");
 });
 
+test("version 1 progress migrates to stable rescue IDs and remains visible", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(([key, value]) => localStorage.setItem(key, value), [SAVE_KEY, JSON.stringify({
+    version: 1,
+    settings: { soundEnabled: true, mode: "zen" },
+    completions: [{
+      levelId: 2,
+      zenCompleted: true,
+      challengeBest: { score: 900, grade: "A" },
+    }],
+  })]);
+  await page.reload();
+
+  await expect(page.getByRole("button", { name: "Mute sound" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Start rescue" }).click();
+  await expect(page.getByRole("button", { name: "Zen", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("level-progress-2")).toHaveText("Zen complete · Best A · 900");
+  expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), SAVE_KEY)).toEqual({
+    version: 2,
+    settings: { soundEnabled: true, mode: "zen" },
+    completions: [{
+      rescueId: "rescue/shell-care",
+      zenCompleted: true,
+      challengeBest: { score: 900, grade: "A" },
+    }],
+  });
+});
+
 test("malformed and old saves safely restore defaults", async ({ page }) => {
   await page.goto("/");
-  for (const serialized of ["{", JSON.stringify({ version: 0, settings: { soundEnabled: true, mode: "zen" }, completions: [] })]) {
+  for (const serialized of [
+    "{",
+    JSON.stringify({ version: 0, settings: { soundEnabled: true, mode: "zen" }, completions: [] }),
+    JSON.stringify({
+      version: 2,
+      settings: { soundEnabled: true, mode: "zen" },
+      completions: [{ rescueId: "rescue/unknown", zenCompleted: true, challengeBest: null }],
+    }),
+  ]) {
     await page.evaluate(([key, value]) => localStorage.setItem(key, value), [SAVE_KEY, serialized]);
     await page.reload();
     await expect(page.getByRole("button", { name: "Turn sound on" })).toHaveAttribute("aria-pressed", "false");

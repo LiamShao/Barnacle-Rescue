@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document approves the player-visible behavior for `FD-101`. It is the behavior source of truth for the first multi-area rescue and the compatibility work in FD1–FD2. It does not change the frozen M1–M9 rescues by itself and does not authorize new mechanics, optional-stage UI, free area selection, or active-run persistence.
+This document approves the shared player-visible behavior for `FD-101`. It is the behavior source of truth for multi-area rescue flow and the compatibility work in FD1–FD2; `TURTLE_BODY_REGION_MAP.md` supplies the concrete views, regions, tuning, and copy for the first rescue. Neither specification changes the frozen M1–M9 rescues by itself or authorizes new mechanics, optional-stage UI, free area selection, or active-run persistence.
 
 ## Player-visible model
 
@@ -69,6 +69,10 @@ Removal, stage completion, transition activation, rescue completion, and persist
 - Given the player abandons a run and later starts that rescue from selection, then the abandoned stages are not restored and a fresh seed creates a new case.
 - Given a stage definition has no target or a generated layout is invalid, when the rescue is prepared, then play does not begin with a silently completed or unreachable area and a usable error or fallback path is provided.
 
+## Concrete first rescue
+
+FD-201 fixes the first slice in `TURTLE_BODY_REGION_MAP.md`: **Whole Turtle Care** has an ordered dorsal “Back and flippers” stage followed by a ventral “Underside” stage, with 10 seeded targets across exactly seven eligible body regions. That content specification and its approved transition copy refine this shared behavior without changing its timing, persistence, or completion rules.
+
 ## Deferred decisions
 
-Free area selection, backward area review, optional/skippable stages, seed sharing, a player-visible case code, active-run resume, and persistence of generated layouts require later product decisions. FD2 still owns the concrete turtle view/region map, transition copy, target allocation, and tuning.
+Free area selection, backward area review, optional/skippable stages, seed sharing, a player-visible case code, active-run resume, and persistence of generated layouts require later product decisions. Additional animals, views beyond dorsal and ventral, and new target mechanics also remain outside the first slice.

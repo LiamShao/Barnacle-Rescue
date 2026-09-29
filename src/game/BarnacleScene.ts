@@ -2,7 +2,7 @@ import { Application, Assets, Container, Graphics, Sprite, Texture } from "pixi.
 import { createBarnacle, damageBarnacle, finishDetachment, isRescueComplete, rescueProgress } from "../domain/barnacle";
 import { rescueBarnacles } from "../levels/levels";
 import type { ResolvedRescueContent } from "../levels/rescueDefinitions";
-import { distance, segmentIntersectsCircle, type Point } from "../domain/geometry";
+import { distance, isPointOnCleanableSurface, segmentIntersectsCircle, type Point } from "../domain/geometry";
 import { advanceAnimal, animalAfterRemoval, celebrationFinished, createAnimal, reactAnimal, type AnimalState } from "../domain/animal";
 import { advanceChallenge, challengeScore, createChallenge, recordRemoval, scrapeShell, type ChallengeState } from "../domain/challenge";
 import { TurtleView } from "./TurtleView";
@@ -302,9 +302,15 @@ export class BarnacleScene {
       }
       if (this.mode === "challenge") {
         const scale = this.turtle.scale.x;
-        const onShell = Math.hypot((point.x - this.turtle.x) / (235 * scale), (point.y - this.turtleCenterY) / (145 * scale)) <= 1;
+        const onCleanableSurface = scale > 0 && isPointOnCleanableSurface(
+          {
+            x: (point.x - this.turtle.x) / scale,
+            y: (point.y - this.turtleCenterY) / scale,
+          },
+          this.content.stages[0].bodyView.cleanableRegions,
+        );
         const oldHealth = this.challenge.health;
-        this.challenge = scrapeShell(this.challenge, onShell ? movement / scale : 0, onTarget);
+        this.challenge = scrapeShell(this.challenge, onCleanableSurface ? movement / scale : 0, onTarget);
         if (this.challenge.health < oldHealth) {
           this.animal = reactAnimal(this.animal, "hurt");
           this.callbacks.onAnimalChange(this.animal);

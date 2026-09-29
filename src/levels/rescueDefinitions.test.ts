@@ -84,6 +84,7 @@ const rescue: RescueDefinition = {
     minimumAffectedRegions: 1,
     maximumAffectedRegions: 1,
     minimumTargetSpacing: 2,
+    minimumTargetHitRadius: 36,
     maximumPlacementAttemptsPerTarget: 20,
   },
   durability: { normalHp: 70, hardHp: 140 },

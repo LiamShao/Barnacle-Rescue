@@ -104,7 +104,7 @@ Real-device touch feel, production audio listening/autoplay behavior, and option
 
 ### FD-103 completion status — 2026-09-24
 
-`src/domain/geometry.ts` now defines immutable circle, rotated-ellipse, oriented-capsule, and simple-polygon primitives with deterministic point containment, circular-footprint containment, exclusion intersection, and minimum-hit-radius placement checks. Degenerate and non-finite geometry is rejected. `CleanableRegion` and `SpawnRegion` default to this concrete union while retaining independent IDs, capacity, weight, exclusions, and fallback anchors. Focused unit coverage exercises boundaries, rotation, every primitive, exclusions, touch reachability, and invalid definitions. Scene integration remains intentionally deferred to FD-106, and the concrete turtle region map remains FD-201.
+`src/domain/geometry.ts` now defines immutable circle, rotated-ellipse, oriented-capsule, and simple-polygon primitives with deterministic point containment, circular-footprint containment, exclusion intersection, and minimum-hit-radius placement checks. Degenerate and non-finite geometry is rejected. `CleanableRegion` and `SpawnRegion` default to this concrete union while retaining independent IDs, capacity, weight, exclusions, and fallback anchors. Focused unit coverage exercises boundaries, rotation, every primitive, exclusions, touch reachability, and invalid definitions. Scene integration was assigned to FD-106; FD-201 later supplied the first concrete turtle region map.
 
 - [x] **FD-104 — Define globally stable identifiers (`S`, depends on FD-102)**
   - Give rescues, stages, views, regions, and targets stable IDs independent of display names and array positions.
@@ -126,28 +126,44 @@ Real-device touch feel, production audio listening/autoplay behavior, and option
 
 Gentle Start, Shell Care, and Full Rescue now resolve as explicit one-stage, fixed-placement `RescueDefinition` content using one configured sea-turtle dorsal view and shallow-ocean environment. React and Pixi consume the resolved content path for selection, target creation, Challenge tuning, and animal/environment assets without branching on a rescue or animal. Counts, type mix, HP, diameter ranges, coordinates, time, health, par scores, replay, next-rescue order, and result behavior remain unchanged. Stable rescue-scoped target IDs replace array-derived runtime IDs. A numeric compatibility projection is derived from the definitions to preserve save-version-1 summaries and existing browser helpers until FD-107. Automated verification covers definition resolution, geometry containment, frozen coordinates, configuration tuning, runtime browser flows, persistence, and asset fallback; real-device touch and difficulty tuning remain unverified.
 
-- [ ] **FD-106 — Replace the hard-coded shell ellipse with configured geometry (`M`, depends on FD-103 and FD-105)**
+- [x] **FD-106 — Replace the hard-coded shell ellipse with configured geometry (`M`, depends on FD-103 and FD-105)**
   - Use the configured cleanable region for bare-body health penalties.
   - Keep water and space outside the animal harmless.
   - Keep accepted target contact clearing accumulated unsafe movement.
 
-- [ ] **FD-107 — Specify save version 2 and migration (`M`, depends on FD-102 and FD-104)**
+### FD-106 completion status — 2026-09-29
+
+Challenge bare-body penalties now transform accepted pointer samples from screen space into the active body view's authored design coordinates and test the configured union of cleanable regions, including each region's exclusions. The scene no longer embeds the shell ellipse dimensions. Target contact still clears accumulated unsafe movement before surface penalties, while water and space outside configured surfaces remain harmless. Focused geometry coverage verifies multiple-region union and exclusion behavior; the existing browser health-failure flow covers configured shell damage, harmless water, and stationary input.
+
+- [x] **FD-107 — Specify save version 2 and migration (`M`, depends on FD-102 and FD-104)**
   - Move persisted completion identity from numeric level IDs to stable rescue IDs.
   - Preserve valid MVP Zen completions and Challenge best scores/grades.
   - Fall back safely for malformed, unsupported, duplicate, or unknown data.
   - Continue excluding active run state.
 
-- [ ] **FD-108 — Add compatibility regression coverage (`M`, depends on FD-105–107)**
+### FD-107 completion status — 2026-09-29
+
+Save version 2 stores completion summaries by stable `RescueId` while retaining the existing sound and mode settings. A strict version-1 reader maps the three legacy numeric level IDs through the configured rescue catalog, preserves valid Zen completion and best Challenge score/grade, and immediately attempts a non-blocking version-2 write. Version-1 or version-2 payloads with malformed fields, unsupported versions, duplicate completion identities, unknown IDs, negative/non-integer scores, or invalid grades fall back to defaults as a whole. Storage read/write failure remains non-fatal, and active run state is still excluded. Deterministic and browser coverage verify migration, persisted schema, visible summaries, defaults, and unavailable storage behavior.
+
+- [x] **FD-108 — Add compatibility regression coverage (`M`, depends on FD-105–107)**
   - Unit-test configuration validation, geometry, stable IDs, progress, completion, and save migration.
   - Run the existing desktop and narrow browser flows without observable behavior changes.
 
-- [ ] **FD-109 — Implement the seeded constrained-placement domain (`L`, depends on FD-102–104)**
+### FD-108 completion status — 2026-09-29
+
+The authored rescue catalog now runs through one deterministic validator before its resolved content is exposed. Validation rejects duplicate or incorrectly scoped content IDs; missing animal, environment, view, cleanable-region, and spawn-region references; invalid geometry, tuning, fallback anchors, fixed counts/type mix, diameter bounds, region capacity, target containment, minimum hit-area spacing, and generated-stage region references. It validates generated-stage contracts without generating layouts, which remains FD-109. Focused suites cover this validator alongside the existing geometry, stable-ID, progress/completion idempotence, and version-1-to-version-2 migration tests. The complete verification pass includes 63 unit tests and all 18 Chromium browser flows at their configured desktop and narrow viewports, with no intended player-visible behavior change.
+
+- [x] **FD-109 — Implement the seeded constrained-placement domain (`L`, depends on FD-102–104)**
   - Select affected regions from configured eligibility, capacity, weight, and minimum/maximum affected-region rules.
   - Allocate the configured total target count and normal/hard mix across selected regions.
   - Sample positions inside authored spawn geometry and outside every exclusion region.
   - Enforce full target containment, minimum spacing, touch reachability, and non-overlap across region boundaries.
   - Use bounded attempts and deterministic fallback anchors so generation cannot hang or produce an unplayable run.
   - Guarantee the same definition and seed produce the same region selection, positions, types, sizes, and IDs.
+
+### FD-109 completion status — 2026-09-29
+
+`generateRescueLayout` now projects fixed stages unchanged and generates configured stages from a typed string or safe-integer seed. The deterministic pipeline selects weighted eligible regions while covering every generated stage and respecting affected-region limits and capacity, allocates the exact total and hard-target mix, samples all four geometry primitives with full visual/minimum-hit-radius containment and exclusions, and enforces same-stage spacing across region boundaries. Sampling is bounded per target. If a region cannot complete its sampled batch, the batch is discarded and rebuilt from authored fallback anchors largest-target-first; impossible selection or placement throws a typed preparation error instead of hanging or emitting an unreachable layout. Generated IDs use rescue ID, typed seed, and rescue-global order only. Seed sweeps verify configured weighting and reach every fixture region while checking geometry, exclusions, capacity, multi-stage coverage, spacing, type mix, reproducibility, seed typing, fallback, failure, and unchanged fixed layouts. The full verification pass includes 72 unit tests and all 18 existing Chromium desktop/narrow flows.
 
 ### FD1 exit criteria
 
@@ -157,15 +173,23 @@ Gentle Start, Shell Care, and Full Rescue now resolve as explicit one-stage, fix
 - Persistence has a deterministic migration path before new rescue IDs ship.
 - Seeded placement is deterministic, validated, and available without changing the frozen MVP layouts.
 
+### FD1 completion status — 2026-09-29
+
+FD-101 through FD-109 are implemented and verified. FD1 provides approved multi-area behavior, stable configuration and identity contracts, cleanable geometry, migrated fixed rescues, configured Challenge surfaces, version-2 persistence migration, authored catalog validation, and a deterministic constrained-placement domain. Generated layouts are deliberately not player-visible yet. FD-201 now supplies the first concrete body-region map; additional view assets, multi-stage runtime, and UI integration remain FD2 work.
+
 ## FD2: first randomized multi-area vertical slice
 
-The recommended reference content is one sea turtle rescue whose barnacles are distributed across eligible shell/back, head/neck, four limb/flipper, and tail regions visible in an authored dorsal view, plus one side or underside view when needed to reach a second dimension. A particular run does not need to use every region, but every configured eligible region must be reachable across validated seeds.
+The reference content is one sea turtle rescue whose dorsal stage covers eligible shell/back, head/neck, and four limb/flipper regions, followed by an underside stage covering plastron and tail base. A particular run does not need to use every region, but every configured eligible region must be reachable across validated seeds.
 
-- [ ] **FD-201 — Specify the turtle body-region and view map (`S`, depends on FD-101 and FD-103)**
+- [x] **FD-201 — Specify the turtle body-region and view map (`S`, depends on FD-101 and FD-103)**
   - Define shell/back, head/neck, each front and rear flipper, tail, and any side/underside regions as explicit eligible or excluded areas.
   - Choose which regions are visible in the existing dorsal view and which require another authored view.
   - Define target count, type mix, sizes, region capacities, spawn weights, minimum affected regions, exclusions, and transition copy.
   - Use only existing normal and hard target mechanics in the first slice.
+
+### FD-201 completion status — 2026-09-29
+
+`TURTLE_BODY_REGION_MAP.md` now fixes the first generated rescue as a two-stage, 820 × 540 sea-turtle case: a compatibility-isolated full-body definition reuses the existing dorsal art for shell/back, neck base, and four independently named flippers, while a new ventral view covers plastron and a deliberately readable tail base. The frozen shell-only view remains unchanged for the first three rescues. The specification defines cleanable and spawn geometry, the facial exclusion, capacities, weights, safe fallback anchors, target and Challenge tuning, stage allocation bounds, visibility and eligibility rules, exact transition copy, edge behavior, and observable acceptance criteria. Ten targets with two hard targets and exactly seven of eight affected regions force a 6–7 dorsal / 3–4 ventral split while allowing every eligible region to appear across seeds. The authored fallback anchors satisfy the current maximum-footprint containment and same-stage spacing rules. This is an approved content specification only; assets and player-visible multi-stage integration remain FD-202 onward.
 
 - [ ] **FD-202 — Produce the second-view asset set and fallback (`M`, depends on FD-201)**
   - Provide the animal base art needed for the selected view.
@@ -238,7 +262,7 @@ The recommended reference content is one sea turtle rescue whose barnacles are d
 - Given two validated different seeds, when their layouts are generated, then they may affect different eligible regions while preserving configured count, type mix, safety, and difficulty bounds.
 - Given head, limb/flipper, tail, and shell regions are eligible, when many validated seeds are exercised, then every eligible region can receive a target and no excluded facial or unsafe region ever does.
 - Given placement cannot satisfy every constraint through sampling, when the bounded attempt limit is reached, then deterministic fallback anchors produce a valid layout or reject the configuration before gameplay begins.
-- Given the rescue contains shell and flipper stages, when the shell is fully cleaned, then the shell is marked complete without showing the final result.
+- Given the rescue contains dorsal and underside stages, when “Back and flippers” is fully cleaned, then that stage is marked complete without showing the final result.
 - Given a completed stage's state is restored during scene lifecycle handling, then its removed targets do not return or count again, even though backward player navigation is not part of the first slice.
 - Given any required stage remains incomplete, when the current stage finishes, then overall progress remains below 100%.
 - Given the last required target is removed, then celebration and total rescue completion occur exactly once.

@@ -34,6 +34,10 @@ The first production pass uses the generated raster assets in `public/assets/gam
 
 These are runtime-ready PNGs rather than layered source art. Dedicated breaking sprites, authored facial layers, and art-source files remain later visual-polish work.
 
+## FD-202 ventral-view brief
+
+FD-201 selects one additional sea-turtle underside view for **Whole Turtle Care**. Its dorsal stage reuses the current raster through a separate full-body view definition, leaving the frozen shell-only view geometry unchanged. The new ventral raster and complete vector fallback must follow `TURTLE_BODY_REGION_MAP.md`: an 820 × 540 design space, centered pivot, head facing right, and a silhouette envelope aligned with the existing 700 × 466 dorsal presentation. The plastron and tail base must be broad and visually distinct enough for the approved 36-unit hit footprint; throat and all four flippers remain visible cleanable surfaces but do not receive targets in the first rescue. Keep the eye, mouth, and nostril area visually clear of the neck safety zone. Do not derive any hit area from transparency or repaint target states into the turtle asset.
+
 ## Feedback targets
 
 Ordinary removal: scrape marks/crack cue → small target wobble → fragments and detach/fall → bubbles → turtle relief → optional score text.
