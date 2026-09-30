@@ -191,17 +191,27 @@ The reference content is one sea turtle rescue whose dorsal stage covers eligibl
 
 `TURTLE_BODY_REGION_MAP.md` now fixes the first generated rescue as a two-stage, 820 × 540 sea-turtle case: a compatibility-isolated full-body definition reuses the existing dorsal art for shell/back, neck base, and four independently named flippers, while a new ventral view covers plastron and a deliberately readable tail base. The frozen shell-only view remains unchanged for the first three rescues. The specification defines cleanable and spawn geometry, the facial exclusion, capacities, weights, safe fallback anchors, target and Challenge tuning, stage allocation bounds, visibility and eligibility rules, exact transition copy, edge behavior, and observable acceptance criteria. Ten targets with two hard targets and exactly seven of eight affected regions force a 6–7 dorsal / 3–4 ventral split while allowing every eligible region to appear across seeds. The authored fallback anchors satisfy the current maximum-footprint containment and same-stage spacing rules. This is an approved content specification only; assets and player-visible multi-stage integration remain FD-202 onward.
 
-- [ ] **FD-202 — Produce the second-view asset set and fallback (`M`, depends on FD-201)**
+- [x] **FD-202 — Produce the second-view asset set and fallback (`M`, depends on FD-201)**
   - Provide the animal base art needed for the selected view.
   - Reuse the current target asset/state pipeline.
   - Provide a complete vector fallback if the new view asset fails.
   - Document pivots, design-space bounds, and cleanable geometry independently of texture alpha.
   - Ensure head, limb/flipper, and tail targets remain visually separated from facial features and silhouette edges.
 
-- [ ] **FD-203 — Implement deterministic multi-stage run state (`M`, depends on FD1)**
+### FD-202 completion status — 2026-09-30
+
+The ventral asset set now contains a transparent 1024 × 682 source candidate and a geometry-tuned `turtle_body_ventral_v4.png` runtime sprite. Both retain the centered pivot, head-right orientation, and 700 × 466 presentation envelope; the final pass makes the pale plastron, quiet facial area, throat, four flippers, and enlarged tail base independently readable. Target states remain separate and continue to use the existing normal/hard intact/cracked pipeline rather than being painted into the animal art. `TurtleView` now accepts dorsal or ventral presentation and starts with a complete vector fallback; the ventral fallback explicitly draws the approved plastron, throat/head, four capsule-aligned flippers, and tail base before any raster texture is supplied. Focused tests cover the default dorsal contract, ventral fallback bounds and animation, and raster replacement. Geometry and target reachability remain defined by `TURTLE_BODY_REGION_MAP.md`, not texture alpha. Typecheck, lint, all 75 unit tests, the production build, and all 18 existing Chromium flows pass. The new rescue is deliberately not player-visible here: generated multi-stage state and Pixi view lifecycle remain FD-203 and FD-204.
+
+- [x] **FD-203 — Implement deterministic multi-stage run state (`M`, depends on FD1)**
   - Generate the run layout from its seed and track active stage, completed stages, per-target state, current-stage progress, and overall progress.
   - Keep target removal and stage/rescue completion idempotent.
   - Reset every stage on replay and discard every stage on abandonment.
+
+### FD-203 completion status — 2026-09-30
+
+`src/state/rescueRun.ts` now prepares a complete immutable run from resolved rescue content and one typed seed. It owns ordered pending/active/complete stages, each target's placement plus fresh HP/damage state, the active-stage index, current-stage and target-weighted overall progress, and the playing → awaiting-next-stage → transitioning → playing/complete state path. Damage and detachment accept only the active playable stage. Target removal, intermediate-stage completion, transition start/finish, and final rescue completion return idempotent event flags so late or repeated calls cannot advance twice. Replay regenerates the same placements and IDs from the original seed while resetting every mutable target/stage; abandonment returns no resumable run state.
+
+The approved `Whole Turtle Care` body views, regions, generated stages, and 10-target tuning now live in the validated production catalog and can be prepared through this run boundary. They remain outside the frozen three-rescue selection and save identity list until the player-visible FD2 flow is ready. Deterministic coverage exercises the full two-stage lifecycle plus 24 production seeds, checking 10 targets, two hard targets, seven affected regions, and the required 6–7 dorsal / 3–4 ventral allocation. Typecheck, lint, all 81 unit tests, the production build, and all 18 existing Chromium flows pass. The parallel browser run emitted the already documented transient Pixi WebGL shader/context warnings without a test failure. Pixi view ownership, React navigation, Challenge/Zen carryover, reactions, and persistence remain later FD2 tasks.
 
 - [ ] **FD-204 — Implement PixiJS view lifecycle (`L`, depends on FD-202 and FD-203)**
   - Render only the active body view.

@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-This document approves the concrete content plan for `FD-201`. It is the source of truth for the first generated, multi-area sea-turtle rescue described by `MULTI_AREA_RESCUE_SPEC.md`. It specifies content and player-visible behavior for later FD2 implementation; it does not add the rescue to the current build by itself.
+This document approves the concrete content plan for `FD-201`. It is the source of truth for the first generated, multi-area sea-turtle rescue described by `MULTI_AREA_RESCUE_SPEC.md`. FD-203 now materializes this definition in the validated production catalog and can prepare its complete session state, but the rescue remains outside player selection until later FD2 integration.
 
 The first slice uses the existing normal and hard barnacle mechanics only. It does not add wounds, tools, optional areas, free view selection, or a third body view.
 

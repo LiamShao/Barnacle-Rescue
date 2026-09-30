@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createBarnacle, damageBarnacle } from "../domain/barnacle";
 import { isValidTargetPlacement } from "../domain/geometry";
-import { levelBarnacles, levels, rescueBarnacles, rescueCatalog, rescues } from "./levels";
+import {
+  levelBarnacles,
+  levels,
+  rescueBarnacles,
+  rescueCatalog,
+  rescues,
+  wholeTurtleCare,
+} from "./levels";
 
 describe("level configurations", () => {
   it("resolves the MVP through three explicit one-stage rescue definitions", () => {
@@ -28,6 +35,30 @@ describe("level configurations", () => {
     const totalHp = levels.map((level) => levelBarnacles(level).reduce((sum, target) => sum + target.maxHp, 0));
     expect(totalHp[0]).toBeLessThan(totalHp[1]);
     expect(totalHp[1]).toBeLessThan(totalHp[2]);
+  });
+
+  it("keeps the prepared multi-stage rescue out of the frozen player selection", () => {
+    expect(rescueCatalog.rescues.map((rescue) => rescue.id)).toContain("rescue/whole-turtle-care");
+    expect(wholeTurtleCare.rescue).toMatchObject({
+      id: "rescue/whole-turtle-care",
+      name: "Whole Turtle Care",
+      spawnProfile: { targetCount: 10, hardTargetCount: 2 },
+    });
+    expect(wholeTurtleCare.stages.map(({ definition, bodyView }) => ({
+      stage: definition.id,
+      view: bodyView.id,
+    }))).toEqual([
+      {
+        stage: "rescue/whole-turtle-care/stage/back-and-flippers",
+        view: "animal/sea-turtle/view/dorsal-full-body",
+      },
+      {
+        stage: "rescue/whole-turtle-care/stage/underside",
+        view: "animal/sea-turtle/view/ventral",
+      },
+    ]);
+    expect(rescues).toHaveLength(3);
+    expect(levels).toHaveLength(3);
   });
 
   for (const level of levels) {

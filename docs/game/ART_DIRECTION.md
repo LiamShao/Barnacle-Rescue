@@ -38,6 +38,14 @@ These are runtime-ready PNGs rather than layered source art. Dedicated breaking 
 
 FD-201 selects one additional sea-turtle underside view for **Whole Turtle Care**. Its dorsal stage reuses the current raster through a separate full-body view definition, leaving the frozen shell-only view geometry unchanged. The new ventral raster and complete vector fallback must follow `TURTLE_BODY_REGION_MAP.md`: an 820 × 540 design space, centered pivot, head facing right, and a silhouette envelope aligned with the existing 700 × 466 dorsal presentation. The plastron and tail base must be broad and visually distinct enough for the approved 36-unit hit footprint; throat and all four flippers remain visible cleanable surfaces but do not receive targets in the first rescue. Keep the eye, mouth, and nostril area visually clear of the neck safety zone. Do not derive any hit area from transparency or repaint target states into the turtle asset.
 
+### FD-202 implemented asset contract
+
+- `turtle_body_ventral.png` is the retained first-generation transparent source candidate; `turtle_body_ventral_v4.png` is the runtime-ready geometry-tuned pass. Both are 1024 × 682 RGBA PNGs with no environment, shadow, target, or authored facial expression.
+- The Pixi sprite uses anchor `(0.5, 0.5)`, is displayed at 700 × 466 design units, and shares the 820 × 540 view pivot with the dorsal presentation. Texture alpha is presentation-only.
+- `TurtleView("ventral")` provides the complete vector fallback. It draws the plastron around `(-20, 0)`, the configured throat/head to the right, independently animated front/rear flippers, and the tail capsule from `(-205, 0)` to `(-285, 0)`. Procedural face and reaction layers remain above either base.
+- The runtime-ready tail base was deliberately enlarged around the approved tail fallback anchor. Final tuning must still be inspected with generated targets during FD-204/FD-211 because FD-202 does not create a player-visible multi-stage run.
+- Normal/hard target textures and state transitions are unchanged and remain independent overlays, so the new animal base reuses the existing target asset pipeline.
+
 ## Feedback targets
 
 Ordinary removal: scrape marks/crack cue → small target wobble → fragments and detach/fall → bubbles → turtle relief → optional score text.
