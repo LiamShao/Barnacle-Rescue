@@ -1,402 +1,100 @@
-# Formal Development Roadmap
+# 正式开发路线
 
-## Status
+更新日期：2026-10-01。以 `bba0ab9` 加工作区阶段 0/1A 实现为基线。旧任务编号保留以便追溯，历史细节移至 [归档](archive/FORMAL_ROADMAP_2026-09-30.md)。
 
-This roadmap begins after the frozen M1–M9 MVP baseline. M10 remains explicitly skipped and must not be represented as completed. `FORMAL_DEVELOPMENT.md` defines the inherited baseline and current D1 status; this document tracks planned formal-development work.
+## 已完成与当前起点
 
-Last updated: 2026-09-24.
+| 范围 | 状态 | 后续处理 |
+| --- | --- | --- |
+| M1–M9 与 D1 首轮资源接入 | 已实现 | 持续回归，设备体验和最终品质待验收 |
+| M10 最终 QA / 部署 | 历史跳过 | 保留历史，另设正式发布门槛 |
+| FD0、FD-101–109 | 已完成 | 复用内容契约、几何、ID、v2 迁移、验证与生成器 |
+| FD-201–203 | 已完成并接入 Zen | 复用双视角内容、腹面资源与 `RescueRun` |
+| 阶段 0：生命周期清理与回归基线 | 已实现，完整串行回归通过 | 详见下方记录；历史间歇性 WebGL 失败的唯一根因尚未确证 |
+| FD-204–206、208，209–211 的 Zen 部分 | 1A 自动验收通过 | 双视角导航、情绪、同案例重玩和最终存档；93 项单测、23 项 E2E 通过 |
+| FD-207、209–211 的 Challenge 部分、212 | 未完成 | 下一步 1B，然后 1C 实机验收 |
 
-## Product direction
+## 阶段一：双视角救援进入玩家流程
 
-Formal development expands Barnacle Rescue along four independent, configuration-driven dimensions:
+阶段 0 更新（2026-10-01）：修正已确认的初始化取消/失败清理缺口，增加幂等销毁及指针释放，单局退出保留 Pixi 页面级共享资源池。84 项单测与完整 Chromium 串行回归 19/19 通过，其中新增测试检查 12 次导航的实际 WebGL 上下文释放。追加三轮桌面/320px 导航与上下文检查 9/9 通过。原历史失败在修正前的本轮导航复查也未复现，因此不能把这些清理缺口认定为唯一根因；保留历史记录并继续监测。1A 的后续检查见 [验收记录](ACCEPTANCE_CRITERIA.md)。
 
-- multiple cleanable body areas within one rescue;
-- constrained random barnacle distribution across eligible body areas;
-- multiple ocean environments;
-- multiple rescued animals.
+最高优先级：选择 Whole Turtle Care → 清理背部和鳍肢 → 切换腹面 → 完成整局 → 同案例重玩/保存成功摘要。先证明这条闭环，再扩展环境和动物。规则以 [共享规范](MULTI_AREA_RESCUE_SPEC.md) 和 [区域规范](TURTLE_BODY_REGION_MAP.md) 为准。
 
-The recommended first implementation uses discrete authored 2D views rather than free 3D rotation. A rescue may move between views such as dorsal, side, flipper, or underside while preserving one continuous run. Within those views, barnacles may appear on any configured eligible region, including shell/back, limbs or flippers, head/neck, and tail. React owns area navigation and accessible status. PixiJS owns the active view, cleanable geometry, generated targets, input, animation, and transient feedback.
+### 1A：Zen 双视角闭环（已实现）
 
-The player-visible multi-area rules are approved in `MULTI_AREA_RESCUE_SPEC.md`. The resulting planning constraints are:
+2026-10-01：Whole Turtle Care 已进入 Zen 选择，复用 run 的 HP/阶段真值，按配置绘制两视图和命中范围；切换保留同一画布，清理旧输入/反馈并防止迟到资源回写。React 提供当前/总进度、阶段操作、焦点及状态文案。重玩保留 seed，新选择生成新案例；存档身份使用可选 legacy 映射，只有最终成功记录摘要。准备失败提供恢复提示。新增桌面/320px 固定 seed 流程、加载降级和延迟资源测试。typecheck、lint、93 项单测、build 和完整串行 Chromium 23/23 通过，桌面/320px 与腹面降级截图已检查；真实设备、音频及跨阶段 Challenge 未验收。
 
-- body areas follow a guided linear order;
-- every configured stage is required; optional or skippable stages require a later product decision;
-- each run layout is generated from a seed; replay/retry reuses it, while selection and next-rescue starts create a fresh seed;
-- total target count and normal/hard mix remain rescue-configured even when affected regions and coordinates vary;
-- random placement uses authored spawn regions and exclusions rather than arbitrary texture pixels;
-- overall progress counts removed targets across all required stages;
-- animal mood derives from overall rescue progress;
-- Challenge timing pauses during non-interactive view transitions only, while combo expiry receives no transition grace;
-- active runs are not persisted;
-- the first public shape remains a local-only single-player web game without accounts, multiplayer, shops, currency, or inventory.
+涉及 FD-204、205、206、208、209，以及 FD-210/211 的 Zen 对应测试；下表保留交付与验收范围。跨阶段 Challenge 完成前不开放新救援的 Challenge 选择，现有三关在两种模式中继续可玩。
 
-## Delivery rules
+| 工作 | 交付 | 依赖与验收 |
+| --- | --- | --- |
+| FD-204 场景接入 | 场景消费 `RescueRun` 的活动阶段目标、视图及几何，使用配置的最小命中半径 | 复用 FD-202/203；不能只换图片或继续只读 `stages[0]` |
+| FD-204 视图生命周期 | 切换锁输入并清理指针/粒子/临时反应；异步资源回调检查运行与视图身份；腹面矢量降级 | 离开、重玩、慢/失败加载后不出现旧视图回写或多余 canvas |
+| FD-205 React 操作 | 阶段标题、当前/总进度、下一区域按钮、焦点与状态播报 | 第一阶段结束只显示下一阶段，重复操作只切换一次 |
+| FD-206/208 情绪与 Zen | 情绪取整局进度；中间脱落 relief，最终才 celebrate；无 Challenge 压力 | 10 个目标全部脱落后只庆祝一次 |
+| FD-209 会话与存档 | 会话持有 seed；选择新 seed、重玩同 seed；可保存 ID 集合与 v1 映射分离 | 新救援无伪造 legacy ID；仅最终成功写摘要 |
+| FD-210/211 测试 | 确定性测试与固定 seed 浏览器流程：准备错误、两阶段、重玩、离开、降级、窄屏 | 实际打通完整 Zen 玩家流程后再标完成 |
 
-- Deliver one playable end-to-end slice at a time.
-- Preserve current scraping, Challenge, Zen, accessibility, navigation, and persistence behavior while compatibility work is underway.
-- Keep target state and rescue completion deterministic and independently unit tested.
-- Define cleanable geometry explicitly; never derive gameplay collision from texture alpha.
-- Keep random generation reproducible from a seed and validate every generated target before the run becomes playable.
-- Treat head, limb, tail, shell, and other body regions as independently eligible content regions with explicit capacities and exclusions.
-- Keep animal mood separate from temporary relief, hurt, and celebration reactions.
-- Keep environments presentational until a separate specification authorizes environment-specific mechanics.
-- Do not mark manual touch, visual, audio, or device checks as verified unless they were executed.
-- Every implementation task must update affected documentation and run configured typecheck, lint, unit, build, and relevant E2E checks.
+实施前明确状态归属：`RescueRun` 持有目标 HP、阶段与移除进度；Pixi 持有渲染和短期反馈；React 接收低频摘要并发出操作。失败与庆祝结束由会话协调，不将领域 `complete` 直接等同于已经展示结果。准备失败时阻止进入游戏，提供可恢复提示和返回选择操作，不保存成功，不静默减少目标或跳过阶段。
 
-## Task sizing
+### 1B：Challenge 连续状态
 
-- `S`: small, isolated change with limited integration risk.
-- `M`: multi-file change with deterministic tests or one UI integration boundary.
-- `L`: end-to-end slice crossing domain, React, PixiJS, persistence, or content assets.
+涉及 FD-207、209，以及 FD-210/211 剩余覆盖；依赖 1A。
 
-## FD0: close the current production-reference slice
+- 倒计时、生命、已得分与连击属于整局，不随视图重建。
+- 等待下一区域时继续计时并可失败；只有非互动切换暂停倒计时，暂停不能延长五秒连击窗口。
+- 分离倒计时有效耗时与连击单调经过时间，保持后台时间规则；明确移除保护期使用的时钟，保持既有 0.6 秒保护行为。
+- `recordRemoval` 使用整局目标总数；第一阶段最后移除不得触发 success 或时间奖励。
+- 最终脱落锁定成功，庆祝不耗时；奖励、评级、结果和成功摘要只发生一次。失败、离开和中间完成不写摘要。
+- 验证等待阶段超时、过期输入优先级、长切换导致连击过期、计时恢复、失败重试和同 seed。
 
-- [x] **FD-001 — Review and close the intact/cracked target asset slice (`S`)**
-  - Confirm normal and hard targets remain distinguishable at actual desktop and narrow gameplay sizes.
-  - Keep the current procedural breaking scale-down unless a playtest demonstrates a readability gap.
-  - Verify the asset-failure vector fallback remains playable.
-  - Record the current code, asset, test, and documentation changes as one formal-development slice.
+完成后 Whole Turtle Care 才在两种模式中作为完整救援开放。
 
-- [x] **FD-002 — Record unresolved D1 manual risks (`S`)**
-  - Record real-device mouse and touch coverage that has and has not been executed.
-  - Keep production audio listening and autoplay behavior open until manually tested.
-  - Keep authored breaking sprites and final animal facial layers as optional polish rather than assumed blockers.
+### 1C：体验与阶段验收
 
-### FD0 exit criteria
+FD-211 完成两种模式桌面/320px 浏览器回归。固定 seed 语料覆盖八个生成区域，验证总数、类型、7 个受影响区域和 6–7 / 3–4 阶段分配；截图检查视图/目标对齐、边缘可达性和降级表现。
 
-- The working baseline is reviewable and internally consistent.
-- No unexecuted manual check is described as verified.
-- The next architecture slice starts from a known passing baseline.
+FD-212 至少记录一台鼠标桌面设备和一台真实触屏设备：浏览器、分辨率/方向、完成体验、误伤、切换按钮、遮挡和问题结论。根据实测调整配置并复查。
 
-### FD0 completion status — 2026-09-17
+FD2 退出条件：两种模式完整救援；重玩/失败/放弃/存档正确；自动检查通过；人工检查有记录，阻断体验的问题已处理。领域基础完成不等于 FD2 完成。
 
-Normal and hard intact/cracked target assets were reviewed in the 1280px and 320px gameplay layouts. Type color and silhouette remain distinguishable; authored cracks are clear at desktop size and retain visible damage texture at narrow size. The asset-failure fallback, target removal rules, three-level flow, replay, modes, persistence, responsive layouts, typecheck, lint, deterministic tests, and production build were rechecked during closure.
+## 阶段二：内容制作工具与稳定性
 
-Real-device touch feel, production audio listening/autoplay behavior, and optional breaking/facial asset polish remain explicitly unverified or deferred. A parallel headless Chromium run reproduced the known transient Pixi WebGL context-creation failure in one 320px test; that test passed immediately when rerun alone, and the serial full-suite result is recorded with the closure verification.
+基于阶段一集成经验，在扩大资源数量前完成必要工具。把原 FD5 中直接帮助内容生产的工作提前，复用已有验证器。
 
-## FD1: multi-area specification and compatibility foundation
+| 编号 | 剩余工作 | 完成条件 |
+| --- | --- | --- |
+| FD-501 | 扩展现有验证：资源路径、种子语料检查；不重写配置/几何基础验证 | 无效内容进入游戏前定位到救援/视图/区域；缺失资源有检查 |
+| FD-502 | 开发专用几何叠层：清理/生成/排除区、命中圈、枢轴、seed、ID | 能检查美术对齐，生产构建不暴露调试入口 |
+| FD-503 | 基于真实双视角内容写制作指南 | 配置、资源、验证、人工检查有完整示例 |
+| FD-504 | 测量加载、切换延迟、纹理内存、重玩及手机帧稳定性，再制定预算/缓存策略 | 有设备和测量记录，资源策略有证据支持 |
 
-- [x] **FD-101 — Approve the multi-area rescue behavior specification (`S`)**
-  - Define `Rescue`, `Stage`, `BodyView`, and `CleanableRegion` in player-visible terms.
-  - Confirm guided versus freely selectable area order.
-  - Confirm required and optional area behavior.
-  - Confirm overall progress, transition timing, completion, replay, and abandonment rules.
-  - Confirm whether replay/retry reuses the current seed or generates a new case, especially for Challenge fairness.
+阶段一可按需要提前做最小调试叠层，不扩展成通用编辑器。
 
-### FD-101 completion status — 2026-09-24
+## 阶段三：第二环境，证明呈现可复用
 
-`MULTI_AREA_RESCUE_SPEC.md` defines the player-visible meaning of rescues, stages, body views, and cleanable regions. The first slice uses required stages in a guided linear order; overall progress is target-weighted across the whole rescue. Challenge state continues across stages, with countdown pause limited to the non-interactive view transition and no added combo grace. Replay and retry recreate the same seeded case, while starting from selection or advancing to another rescue creates a fresh seed. Abandonment and page reload discard the active run, and persistence occurs only after the final required stage succeeds.
+FD-301 的环境 ID、定义与背景资源已存在；剩余项是将场景配色、环境粒子与氛围参数放入配置，按实际需要扩展字段。
 
-- [x] **FD-102 — Define configuration contracts (`M`, depends on FD-101)**
-  - Define `RescueDefinition`, `RescueStage`, `AnimalDefinition`, `BodyViewDefinition`, `EnvironmentDefinition`, `SpawnRegion`, `SpawnProfile`, and generated `TargetPlacement`.
-  - Keep immutable content definitions separate from per-run state.
-  - Make valid animal/environment combinations explicit instead of generating a Cartesian product.
+执行 FD-301 剩余项 → FD-302 选定和定义新环境 → FD-303/304 资源及一项明确的动物/环境组合救援 → FD-305 加载、切换、降级和性能验证。
 
-### FD-102 completion status — 2026-09-24
+完成条件：同一海龟在两种环境中复用清理/阶段规则；目标可读，环境只改变呈现。具体环境选型和资源仍待设计。
 
-`src/levels/rescueDefinitions.ts` defines readonly rescue, stage, animal, body-view, environment, cleanable-region, spawn-region, spawn-profile, fixed/generated placement, catalog, and resolved-content contracts. Each rescue explicitly references its supported animal/environment pair and its ordered stages reference only views on that animal. Geometry remains a generic parameter for FD-103, while mutable HP and reaction state remain outside the immutable `TargetPlacement` layout. Focused unit coverage verifies explicit pairing and rejects missing rescue, animal, environment, and body-view references. The current three levels remain on `LevelConfig` until FD-105, so this slice does not change player-visible behavior.
+## 阶段四：第二动物，证明机制可复用
 
-- [x] **FD-103 — Define cleanable geometry primitives (`M`, depends on FD-101)**
-  - Support deterministic ellipse, circle, capsule, and polygon regions as needed.
-  - Support exclusion regions for eyes, mouth, wounds, UI-obscured areas, and other unsafe surfaces.
-  - Define containment and minimum touch-target validation.
-  - Give shell/back, each limb or flipper, head/neck, tail, and future animal-specific parts independent region IDs, capacities, and spawn weights.
+执行 FD-401 确定动物与照护场景 → FD-402 两视角几何/反应规范 → FD-403 所需呈现接口 → FD-404 资源 → FD-405 完整救援 → FD-406 参数/设备验收。
 
-### FD-103 completion status — 2026-09-24
+选择后核对物种和清理情境的合理性，不预先锁定物种。共享目标伤害、移除、进度与完成规则，动物负责自己的轮廓、视图、表情与动画。完成条件：第二动物拥有独立可读几何与反应、复用已有环境，通过两种模式、存档和设备验证。
 
-`src/domain/geometry.ts` now defines immutable circle, rotated-ellipse, oriented-capsule, and simple-polygon primitives with deterministic point containment, circular-footprint containment, exclusion intersection, and minimum-hit-radius placement checks. Degenerate and non-finite geometry is rejected. `CleanableRegion` and `SpawnRegion` default to this concrete union while retaining independent IDs, capacity, weight, exclusions, and fallback anchors. Focused unit coverage exercises boundaries, rotation, every primitive, exclusions, touch reachability, and invalid definitions. Scene integration was assigned to FD-106; FD-201 later supplied the first concrete turtle region map.
+## 发布门槛：可独立排期
 
-- [x] **FD-104 — Define globally stable identifiers (`S`, depends on FD-102)**
-  - Give rescues, stages, views, regions, and targets stable IDs independent of display names and array positions.
-  - Guarantee target uniqueness across the complete rescue.
-  - Keep removal and completion idempotent across stage changes.
-  - Derive generated target IDs deterministically from rescue seed and generation order without using display coordinates as identity.
+FD-505 不必等待第二环境或第二动物。双视角版本通过 1C 后，即可安排首个正式可发布版本。
 
-### FD-104 completion status — 2026-09-24
+交付：支持浏览器/设备矩阵、输入/音频实测、资源预算、构建与检查自动化、部署目标与预览流程、静态资源缓存策略、错误记录方式、发布清单和回滚说明。具体服务和外部发布另行处理，本路线不执行部署。
 
-`src/domain/identifiers.ts` defines branded and scope-qualified IDs for animals, environments, rescues, stages, body views, cleanable regions, spawn regions, and targets. Authored keys are validated independently of display labels and array positions. Generated targets use rescue ID, typed seed, and rescue-global generation order only; replaying a seed reproduces the same IDs without coordinate coupling. Content resolution rejects duplicate authored target IDs across stages, and focused coverage confirms that the existing removal/completion ledger ignores repeated IDs before and after terminal completion. FD-105 now derives the retained numeric save-version-1 IDs from these stable rescue definitions.
+完成条件：干净安装到构建/预览可复现，支持矩阵通过验收，已知问题明确，发布/回滚步骤可执行。历史 M10 仍保持跳过。
 
-- [x] **FD-105 — Adapt the three current levels to one-stage rescues (`M`, depends on FD-102–104)**
-  - Represent Gentle Start, Shell Care, and Full Rescue through the new configuration path.
-  - Preserve their existing target count, HP, placement, score, time, result, and persistence behavior.
-  - Avoid branching on a specific level or animal in the scene.
-  - Keep their frozen authored placements through an explicit fixed-placement compatibility mode until random distribution ships in FD2.
+## 执行与完成规则
 
-### FD-105 completion status — 2026-09-24
+**1A Zen 闭环已通过自动验收**，下一步执行 **1B Challenge 连续状态 → 1C 自动/实机验收 → 内容工具与稳定性 → 环境复用 → 动物复用**。发布门槛可从 1C 后独立安排。每次推进一个可验证切片，未掌握设备验收与资源生产耗时前不承诺日期。
 
-Gentle Start, Shell Care, and Full Rescue now resolve as explicit one-stage, fixed-placement `RescueDefinition` content using one configured sea-turtle dorsal view and shallow-ocean environment. React and Pixi consume the resolved content path for selection, target creation, Challenge tuning, and animal/environment assets without branching on a rescue or animal. Counts, type mix, HP, diameter ranges, coordinates, time, health, par scores, replay, next-rescue order, and result behavior remain unchanged. Stable rescue-scoped target IDs replace array-derived runtime IDs. A numeric compatibility projection is derived from the definitions to preserve save-version-1 summaries and existing browser helpers until FD-107. Automated verification covers definition resolution, geometry containment, frozen coordinates, configuration tuning, runtime browser flows, persistence, and asset fallback; real-device touch and difficulty tuning remain unverified.
-
-- [x] **FD-106 — Replace the hard-coded shell ellipse with configured geometry (`M`, depends on FD-103 and FD-105)**
-  - Use the configured cleanable region for bare-body health penalties.
-  - Keep water and space outside the animal harmless.
-  - Keep accepted target contact clearing accumulated unsafe movement.
-
-### FD-106 completion status — 2026-09-29
-
-Challenge bare-body penalties now transform accepted pointer samples from screen space into the active body view's authored design coordinates and test the configured union of cleanable regions, including each region's exclusions. The scene no longer embeds the shell ellipse dimensions. Target contact still clears accumulated unsafe movement before surface penalties, while water and space outside configured surfaces remain harmless. Focused geometry coverage verifies multiple-region union and exclusion behavior; the existing browser health-failure flow covers configured shell damage, harmless water, and stationary input.
-
-- [x] **FD-107 — Specify save version 2 and migration (`M`, depends on FD-102 and FD-104)**
-  - Move persisted completion identity from numeric level IDs to stable rescue IDs.
-  - Preserve valid MVP Zen completions and Challenge best scores/grades.
-  - Fall back safely for malformed, unsupported, duplicate, or unknown data.
-  - Continue excluding active run state.
-
-### FD-107 completion status — 2026-09-29
-
-Save version 2 stores completion summaries by stable `RescueId` while retaining the existing sound and mode settings. A strict version-1 reader maps the three legacy numeric level IDs through the configured rescue catalog, preserves valid Zen completion and best Challenge score/grade, and immediately attempts a non-blocking version-2 write. Version-1 or version-2 payloads with malformed fields, unsupported versions, duplicate completion identities, unknown IDs, negative/non-integer scores, or invalid grades fall back to defaults as a whole. Storage read/write failure remains non-fatal, and active run state is still excluded. Deterministic and browser coverage verify migration, persisted schema, visible summaries, defaults, and unavailable storage behavior.
-
-- [x] **FD-108 — Add compatibility regression coverage (`M`, depends on FD-105–107)**
-  - Unit-test configuration validation, geometry, stable IDs, progress, completion, and save migration.
-  - Run the existing desktop and narrow browser flows without observable behavior changes.
-
-### FD-108 completion status — 2026-09-29
-
-The authored rescue catalog now runs through one deterministic validator before its resolved content is exposed. Validation rejects duplicate or incorrectly scoped content IDs; missing animal, environment, view, cleanable-region, and spawn-region references; invalid geometry, tuning, fallback anchors, fixed counts/type mix, diameter bounds, region capacity, target containment, minimum hit-area spacing, and generated-stage region references. It validates generated-stage contracts without generating layouts, which remains FD-109. Focused suites cover this validator alongside the existing geometry, stable-ID, progress/completion idempotence, and version-1-to-version-2 migration tests. The complete verification pass includes 63 unit tests and all 18 Chromium browser flows at their configured desktop and narrow viewports, with no intended player-visible behavior change.
-
-- [x] **FD-109 — Implement the seeded constrained-placement domain (`L`, depends on FD-102–104)**
-  - Select affected regions from configured eligibility, capacity, weight, and minimum/maximum affected-region rules.
-  - Allocate the configured total target count and normal/hard mix across selected regions.
-  - Sample positions inside authored spawn geometry and outside every exclusion region.
-  - Enforce full target containment, minimum spacing, touch reachability, and non-overlap across region boundaries.
-  - Use bounded attempts and deterministic fallback anchors so generation cannot hang or produce an unplayable run.
-  - Guarantee the same definition and seed produce the same region selection, positions, types, sizes, and IDs.
-
-### FD-109 completion status — 2026-09-29
-
-`generateRescueLayout` now projects fixed stages unchanged and generates configured stages from a typed string or safe-integer seed. The deterministic pipeline selects weighted eligible regions while covering every generated stage and respecting affected-region limits and capacity, allocates the exact total and hard-target mix, samples all four geometry primitives with full visual/minimum-hit-radius containment and exclusions, and enforces same-stage spacing across region boundaries. Sampling is bounded per target. If a region cannot complete its sampled batch, the batch is discarded and rebuilt from authored fallback anchors largest-target-first; impossible selection or placement throws a typed preparation error instead of hanging or emitting an unreachable layout. Generated IDs use rescue ID, typed seed, and rescue-global order only. Seed sweeps verify configured weighting and reach every fixture region while checking geometry, exclusions, capacity, multi-stage coverage, spacing, type mix, reproducibility, seed typing, fallback, failure, and unchanged fixed layouts. The full verification pass includes 72 unit tests and all 18 existing Chromium desktop/narrow flows.
-
-### FD1 exit criteria
-
-- All three existing rescues run through the new definitions as one-stage rescues.
-- Current player-visible behavior remains unchanged.
-- The scene no longer assumes one specific turtle-shell ellipse.
-- Persistence has a deterministic migration path before new rescue IDs ship.
-- Seeded placement is deterministic, validated, and available without changing the frozen MVP layouts.
-
-### FD1 completion status — 2026-09-29
-
-FD-101 through FD-109 are implemented and verified. FD1 provides approved multi-area behavior, stable configuration and identity contracts, cleanable geometry, migrated fixed rescues, configured Challenge surfaces, version-2 persistence migration, authored catalog validation, and a deterministic constrained-placement domain. Generated layouts are deliberately not player-visible yet. FD-201 now supplies the first concrete body-region map; additional view assets, multi-stage runtime, and UI integration remain FD2 work.
-
-## FD2: first randomized multi-area vertical slice
-
-The reference content is one sea turtle rescue whose dorsal stage covers eligible shell/back, head/neck, and four limb/flipper regions, followed by an underside stage covering plastron and tail base. A particular run does not need to use every region, but every configured eligible region must be reachable across validated seeds.
-
-- [x] **FD-201 — Specify the turtle body-region and view map (`S`, depends on FD-101 and FD-103)**
-  - Define shell/back, head/neck, each front and rear flipper, tail, and any side/underside regions as explicit eligible or excluded areas.
-  - Choose which regions are visible in the existing dorsal view and which require another authored view.
-  - Define target count, type mix, sizes, region capacities, spawn weights, minimum affected regions, exclusions, and transition copy.
-  - Use only existing normal and hard target mechanics in the first slice.
-
-### FD-201 completion status — 2026-09-29
-
-`TURTLE_BODY_REGION_MAP.md` now fixes the first generated rescue as a two-stage, 820 × 540 sea-turtle case: a compatibility-isolated full-body definition reuses the existing dorsal art for shell/back, neck base, and four independently named flippers, while a new ventral view covers plastron and a deliberately readable tail base. The frozen shell-only view remains unchanged for the first three rescues. The specification defines cleanable and spawn geometry, the facial exclusion, capacities, weights, safe fallback anchors, target and Challenge tuning, stage allocation bounds, visibility and eligibility rules, exact transition copy, edge behavior, and observable acceptance criteria. Ten targets with two hard targets and exactly seven of eight affected regions force a 6–7 dorsal / 3–4 ventral split while allowing every eligible region to appear across seeds. The authored fallback anchors satisfy the current maximum-footprint containment and same-stage spacing rules. This is an approved content specification only; assets and player-visible multi-stage integration remain FD-202 onward.
-
-- [x] **FD-202 — Produce the second-view asset set and fallback (`M`, depends on FD-201)**
-  - Provide the animal base art needed for the selected view.
-  - Reuse the current target asset/state pipeline.
-  - Provide a complete vector fallback if the new view asset fails.
-  - Document pivots, design-space bounds, and cleanable geometry independently of texture alpha.
-  - Ensure head, limb/flipper, and tail targets remain visually separated from facial features and silhouette edges.
-
-### FD-202 completion status — 2026-09-30
-
-The ventral asset set now contains a transparent 1024 × 682 source candidate and a geometry-tuned `turtle_body_ventral_v4.png` runtime sprite. Both retain the centered pivot, head-right orientation, and 700 × 466 presentation envelope; the final pass makes the pale plastron, quiet facial area, throat, four flippers, and enlarged tail base independently readable. Target states remain separate and continue to use the existing normal/hard intact/cracked pipeline rather than being painted into the animal art. `TurtleView` now accepts dorsal or ventral presentation and starts with a complete vector fallback; the ventral fallback explicitly draws the approved plastron, throat/head, four capsule-aligned flippers, and tail base before any raster texture is supplied. Focused tests cover the default dorsal contract, ventral fallback bounds and animation, and raster replacement. Geometry and target reachability remain defined by `TURTLE_BODY_REGION_MAP.md`, not texture alpha. Typecheck, lint, all 75 unit tests, the production build, and all 18 existing Chromium flows pass. The new rescue is deliberately not player-visible here: generated multi-stage state and Pixi view lifecycle remain FD-203 and FD-204.
-
-- [x] **FD-203 — Implement deterministic multi-stage run state (`M`, depends on FD1)**
-  - Generate the run layout from its seed and track active stage, completed stages, per-target state, current-stage progress, and overall progress.
-  - Keep target removal and stage/rescue completion idempotent.
-  - Reset every stage on replay and discard every stage on abandonment.
-
-### FD-203 completion status — 2026-09-30
-
-`src/state/rescueRun.ts` now prepares a complete immutable run from resolved rescue content and one typed seed. It owns ordered pending/active/complete stages, each target's placement plus fresh HP/damage state, the active-stage index, current-stage and target-weighted overall progress, and the playing → awaiting-next-stage → transitioning → playing/complete state path. Damage and detachment accept only the active playable stage. Target removal, intermediate-stage completion, transition start/finish, and final rescue completion return idempotent event flags so late or repeated calls cannot advance twice. Replay regenerates the same placements and IDs from the original seed while resetting every mutable target/stage; abandonment returns no resumable run state.
-
-The approved `Whole Turtle Care` body views, regions, generated stages, and 10-target tuning now live in the validated production catalog and can be prepared through this run boundary. They remain outside the frozen three-rescue selection and save identity list until the player-visible FD2 flow is ready. Deterministic coverage exercises the full two-stage lifecycle plus 24 production seeds, checking 10 targets, two hard targets, seven affected regions, and the required 6–7 dorsal / 3–4 ventral allocation. Typecheck, lint, all 81 unit tests, the production build, and all 18 existing Chromium flows pass. The parallel browser run emitted the already documented transient Pixi WebGL shader/context warnings without a test failure. Pixi view ownership, React navigation, Challenge/Zen carryover, reactions, and persistence remain later FD2 tasks.
-
-- [ ] **FD-204 — Implement PixiJS view lifecycle (`L`, depends on FD-202 and FD-203)**
-  - Render only the active body view.
-  - Destroy or safely reuse input, particles, target views, and transient animation during transitions.
-  - Prevent late asset promises from mutating a newer view or run.
-  - Preload the next view only when it does not delay the playable current view.
-
-- [ ] **FD-205 — Implement React area navigation (`M`, depends on FD-203)**
-  - Display the current area and overall rescue progress.
-  - Reveal a clear next-area action after the current required stage is complete.
-  - Move focus to the appropriate primary action after stage completion and view entry.
-  - Prevent repeated activation while a transition is in progress.
-
-- [ ] **FD-206 — Carry animal mood and reactions across views (`M`, depends on FD-203 and FD-204)**
-  - Derive persistent mood from overall rescue progress.
-  - Use relief for non-final removals and stage completion.
-  - Trigger celebration only after the final required target in the final required stage.
-  - Prevent stale reactions from the prior view from updating the new view.
-
-- [ ] **FD-207 — Carry Challenge state across views (`M`, depends on FD-203–205)**
-  - Keep score, combo, health, and total elapsed time continuous.
-  - Pause time only during a non-interactive authored transition.
-  - Prevent transition duration from extending the combo window unless explicitly specified.
-  - Award the final time bonus and grade once, after total rescue completion.
-
-- [ ] **FD-208 — Carry Zen state across views (`S`, depends on FD-203–206)**
-  - Use identical target damage, removal, mood, and completion rules.
-  - Keep timer, failure, health loss, score, and combo pressure absent.
-
-- [ ] **FD-209 — Update results and persistence (`M`, depends on FD-203 and FD-107)**
-  - Record success only after all required stages complete.
-  - Allow the result to summarize completed body areas without exposing implementation details.
-  - Keep failed or abandoned multi-stage runs from changing completion records.
-  - Do not persist an active seed or generated layout unless a later decision explicitly adds run resumption.
-
-- [ ] **FD-210 — Add multi-stage deterministic tests (`M`, depends on FD-203 and FD-206–209)**
-  - Cover stage completion without rescue completion.
-  - Cover overall progress and mood thresholds across stages.
-  - Cover the final completion lock, replay reset, transition timing, and unique target counting.
-  - Cover Challenge and Zen differences.
-  - Cover seed reproducibility, different-seed variation, region capacity, exclusions, containment, spacing, type mix, bounded failure, and deterministic fallback anchors.
-
-- [ ] **FD-211 — Add two-area browser coverage (`L`, depends on FD-204–209)**
-  - Complete the first area without showing the final result.
-  - Change views and retain overall state.
-  - Complete the second area and celebrate exactly once.
-  - Cover replay, abandonment, mode retention, asset fallback, desktop, and narrow layouts.
-  - Exercise seeds that place targets on shell/back, head/neck, front and rear flippers, and tail without relying on random chance in the test.
-
-- [ ] **FD-212 — Run documented real-device input checks (`M`, depends on FD-211)**
-  - Test at least one mouse-driven desktop browser and one touch device.
-  - Check scrape distance, accidental bare-body damage, view controls, HUD obstruction, and orientation changes.
-  - Record devices, browsers, observations, and unresolved issues.
-
-### FD2 observable acceptance criteria
-
-- Given a rescue starts with a known seed, when its layout is generated repeatedly, then affected regions, target types, sizes, coordinates, and IDs are identical.
-- Given two validated different seeds, when their layouts are generated, then they may affect different eligible regions while preserving configured count, type mix, safety, and difficulty bounds.
-- Given head, limb/flipper, tail, and shell regions are eligible, when many validated seeds are exercised, then every eligible region can receive a target and no excluded facial or unsafe region ever does.
-- Given placement cannot satisfy every constraint through sampling, when the bounded attempt limit is reached, then deterministic fallback anchors produce a valid layout or reject the configuration before gameplay begins.
-- Given the rescue contains dorsal and underside stages, when “Back and flippers” is fully cleaned, then that stage is marked complete without showing the final result.
-- Given a completed stage's state is restored during scene lifecycle handling, then its removed targets do not return or count again, even though backward player navigation is not part of the first slice.
-- Given any required stage remains incomplete, when the current stage finishes, then overall progress remains below 100%.
-- Given the last required target is removed, then celebration and total rescue completion occur exactly once.
-- Given a view transition occurs in Challenge, then health, score, combo state, and total run time remain consistent with the specified transition rules.
-- Given replay is selected, then every stage, target, timer, score, health value, mood, and reaction is fresh.
-- Given a view asset fails, then the affected view remains playable through its fallback.
-
-### FD2 exit criteria
-
-- One continuous rescue includes at least two body areas.
-- Barnacles can appear across configured shell/back, head/neck, limb/flipper, and tail regions rather than only on the back.
-- Layout variation is seeded, constrained, reproducible, and always playable.
-- Both Challenge and Zen complete correctly.
-- Desktop and narrow automated flows pass.
-- Real-device checks are reported honestly and separately.
-
-## FD3: environment expansion
-
-- [ ] **FD-301 — Extract the current shallow-ocean environment definition (`M`, depends on FD1)**
-  - Move background, palette, ambient particles, and ambience identity behind `EnvironmentDefinition`.
-  - Keep target, animal, and rescue state outside the environment definition.
-
-- [ ] **FD-302 — Specify a second environment (`S`, depends on FD-301)**
-  - Prefer a seagrass bed or supervised rescue-pool setting for the first comparison.
-  - Define presentation, ambience, foreground constraints, reduced-motion behavior, and fallback.
-  - Do not introduce environment-specific gameplay in this slice.
-
-- [ ] **FD-303 — Produce and integrate the second environment (`M`, depends on FD-302)**
-  - Add background, restrained ambient motion, and ambience/audio configuration.
-  - Keep targets and cleanable geometry readable against the new palette.
-
-- [ ] **FD-304 — Create one explicit rescue using the new environment (`M`, depends on FD-303)**
-  - Reuse an existing animal and the multi-area system.
-  - Declare the animal/environment pairing explicitly.
-
-- [ ] **FD-305 — Verify environment lifecycle and performance (`M`, depends on FD-303 and FD-304)**
-  - Cover loading fallback, replay, rescue switching, reduced motion, resource cleanup, mobile memory, and frame stability.
-
-### FD3 exit criteria
-
-- The same animal can be rescued in two environments without duplicated mechanics code.
-- Environment changes remain presentational and configuration-driven.
-
-## FD4: second rescued animal
-
-- [ ] **FD-401 — Select the second animal and care scenario (`M`)**
-  - Validate that the body shape supports multiple readable cleaning areas.
-  - Review the basic ecological and rescue-care framing before presenting barnacle removal as beneficial.
-  - Define how the second animal differs from a turtle beyond a texture swap.
-
-- [ ] **FD-402 — Specify the second animal's views and regions (`M`, depends on FD-401)**
-  - Define at least two body views with their own cleanable and exclusion geometry.
-  - Define mood poses and relief, hurt, and celebration presentation for each relevant view.
-  - Do not reuse the turtle shell ellipse as a hidden assumption.
-  - Define species-specific eligible regions, capacities, weights, exclusions, and fallback anchors for constrained random placement.
-
-- [ ] **FD-403 — Introduce an animal-view rendering contract (`M`, depends on FD-402)**
-  - Map shared domain mood/reaction state to animal-specific presentation.
-  - Keep animation-frame state in PixiJS and persistent domain state outside the renderer.
-  - Preserve a usable fallback for every required view.
-
-- [ ] **FD-404 — Produce the second animal asset set (`L`, depends on FD-402 and FD-403)**
-  - Create body-view bases, required expression layers, pivots, and documented bounds.
-  - Reuse shared target assets unless the specification authorizes a new target behavior.
-
-- [ ] **FD-405 — Create the second animal's first rescue (`L`, depends on FD-404)**
-  - Use one existing environment and at least two body areas.
-  - Avoid introducing a new tool, economy, or progression system in the same slice.
-
-- [ ] **FD-406 — Balance and verify the second animal (`M`, depends on FD-405)**
-  - Tune target count, HP, size, timing, and par score through configuration.
-  - Cover persistence, result summaries, desktop, narrow, reduced motion, and real touch.
-
-### FD4 exit criteria
-
-- The second animal has distinct body geometry, views, and reactions while sharing the same rescue-domain rules.
-- No level-specific or animal-specific branch is required in target damage and completion logic.
-
-## FD5: content production and release capability
-
-- [ ] **FD-501 — Add deterministic content validation (`M`)**
-  - Reject duplicate IDs, missing references, impossible target counts, insufficient region capacity, invalid spawn/exclusion geometry, unreachable fallback anchors, overlapping targets, and missing required assets.
-
-- [ ] **FD-502 — Add development-only geometry overlays (`M`)**
-  - Visualize cleanable regions, spawn regions, exclusions, fallback anchors, generated target hit circles, IDs, seed, pivots, and design-space bounds.
-  - Keep overlays unavailable in production builds.
-
-- [ ] **FD-503 — Write the content authoring guide (`S`, depends on FD-501 and FD-502)**
-  - Document how to add an environment, animal, body view, rescue, stage, and target placement.
-  - Include validation, asset naming, fallback, test, and manual-review requirements.
-
-- [ ] **FD-504 — Establish asset and performance budgets (`M`)**
-  - Set budgets for initial load, one active view, transition latency, texture memory, and mobile frame stability.
-  - Define preload and eviction rules from measured behavior.
-
-- [ ] **FD-505 — Establish the formal release workflow (`L`)**
-  - Choose a deployment target and supported browser/device matrix.
-  - Add repeatable deployment, error monitoring, release checks, rollback guidance, and known-issue reporting.
-
-## Critical path
-
-Execute the next architecture work in this order:
-
-1. `FD-001` — close the current asset slice.
-2. `FD-101` — approve observable multi-area behavior.
-3. `FD-102`–`FD-104` — define content contracts, geometry, random-spawn regions, and stable IDs.
-4. `FD-105`–`FD-109` — migrate current rescues without behavior changes and prove seeded constrained placement.
-5. `FD-201`–`FD-212` — deliver the seeded randomized multi-area turtle slice.
-6. `FD3` — prove environment reuse.
-7. `FD4` — prove animal reuse.
-8. `FD5` — improve content throughput and release capability after the model is proven.
-
-## Global definition of done
-
-A task is complete only when all applicable items are true:
-
-- observable behavior and edge cases are documented;
-- configuration remains data-driven;
-- generated content is reproducible from a seed and valid across its supported seed test set;
-- domain rules are deterministic and unit tested;
-- relevant React/PixiJS boundaries remain intact;
-- persistence changes include validation and migration behavior;
-- typecheck, lint, unit, build, and relevant E2E checks actually pass;
-- desktop and narrow layouts are covered when UI or gameplay changes;
-- touch, audio, visual feel, and device behavior are reported as manual checks when automation cannot establish them;
-- affected game documents match shipped behavior;
-- known limitations and the next smallest valuable slice are recorded.
+每个切片需有可观察行为/边界验收、相关确定性测试、配置驱动实现、正确 React/Pixi 生命周期、实际通过的 typecheck/lint/unit/build/相关 E2E 和同步文档。触控、音频、视觉观感实测后才标通过。详见 [验收文档](ACCEPTANCE_CRITERIA.md)。

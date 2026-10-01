@@ -17,6 +17,20 @@ const identities: readonly SaveIdentity[] = [
 ];
 
 describe("versioned local progress", () => {
+  it("saves a new rescue without inventing a legacy level mapping", () => {
+    const newId = rescueId("whole-turtle-care");
+    const extended = [...identities, { rescueId: newId }];
+    const save = recordCompletion(defaultSave(), newId, "zen");
+    expect(loadSave({ getItem: () => JSON.stringify(save) }, extended)).toEqual(save);
+    const legacy = {
+      version: 1, settings: defaultSave().settings,
+      completions: [{ levelId: 2, zenCompleted: true, challengeBest: null }],
+    };
+    expect(loadSave({ getItem: () => JSON.stringify(legacy) }, extended).completions[0].rescueId).toBe(identities[1].rescueId);
+    const fabricated = { ...legacy, completions: [{ levelId: 4, zenCompleted: true, challengeBest: null }] };
+    expect(loadSave({ getItem: () => JSON.stringify(fabricated) }, extended)).toEqual(defaultSave());
+    expect(loadSave({ getItem: () => JSON.stringify(save) }, [...extended, { rescueId: newId }])).toEqual(defaultSave());
+  });
   it("returns safe defaults for missing, malformed, unsupported, unknown, or duplicate data", () => {
     const invalid = [
       null,

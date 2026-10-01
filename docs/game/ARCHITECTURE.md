@@ -1,115 +1,64 @@
 # Architecture
 
-## Default stack
+Updated: 2026-10-01. This document describes the actual code and distinguishes the pending multi-stage integration. Historical milestone details are retained in [the roadmap archive](archive/FORMAL_ROADMAP_2026-09-30.md).
 
-Because the repository begins empty, use React, TypeScript, Vite, PixiJS, Zustand, localStorage, Vitest, and Playwright. M8 uses small synthesized Web Audio cues so the prototype remains asset-free; introduce Howler.js only when imported clips, mixing, or broader audio controls justify it. Introduce each dependency only when its milestone needs it.
+## Current stack and ownership
 
-## Ownership boundary
+React, TypeScript, Vite, PixiJS, localStorage, Vitest and Playwright are installed. Audio uses synthesized Web Audio cues. Zustand and Howler.js are not installed; introduce a library only when a demonstrated need warrants it.
 
-```text
-React application
-├── Main Menu / Mode Select / Level Select
-├── HUD / Result Modal
-└── GameViewport lifecycle boundary
-    └── PixiJS scene, input, hit detection, animation, particles
-```
+React owns menus, mode/rescue selection, HUD, accessible status, result UI, settings and navigation. Pixi owns interactive rendering, pointer sampling, collision, animation and transient feedback. Do not publish frame-by-frame renderer state through React.
 
-React owns routes/screens, accessible controls, overlays, and ordinary CSS layout. PixiJS owns the turtle scene, scraper, barnacle visuals, pointer sampling, collision, and gameplay feedback. Do not mirror frame-by-frame render state through React.
+| Boundary | Current responsibility |
+| --- | --- |
+| `src/App.tsx` | Selected playable rescue, prepared session/seed, stage summaries, accessible next-area UI, settings, result and final completion writes |
+| `src/game/GameViewport.tsx` | One scene per run, Next area command, low-frequency callbacks, initialization error recovery and live sound setting |
+| `src/game/BarnacleScene.ts` | Runtime `RescueRun`, active target views, pointer input, view transitions, Challenge/animal state, ticker, textures and feedback |
+| `src/game/TurtleView.ts` | Dorsal/ventral presentation, raster base, complete vector fallback and procedural expression layers |
+| `src/domain/` | Deterministic barnacle lifecycle, mood/reactions, geometry, identities and Challenge rules |
+| `src/levels/` | Immutable content catalog, resolution, validation, fixed compatibility projection and seeded generation |
+| `src/state/persistence.ts` | Strict versioned settings/completion adapter and v1-to-v2 migration |
+| `src/state/rescueRun.ts` | Deterministic multi-stage target/HP/progress domain consumed by the scene; low-frequency summary projection |
+| `src/state/rescueSession.ts` | Prepares a fresh whole-rescue run before mounting; default fresh UUID seed or explicit retained replay seed; rejects unfinished multi-area Challenge |
 
-D1 keeps an immediately playable vector scene as the loading and error fallback, then asynchronously applies raster textures for the ocean, turtle, targets, and scraper. Texture dimensions and transparency are presentation-only: configured design coordinates, circular target hit areas, scraper sampling, and all domain state remain unchanged. Procedural face/reaction and damage overlays sit above the raster bases.
+## Content and layout
 
-## State and data
+`RescueDefinition` explicitly references one animal/environment pair and ordered stages. Stages reference animal-owned body views and fixed targets or eligible generated spawn regions. Definitions are separate from mutable run state.
 
-- Keep immutable level definitions in configuration, separate from per-run state.
-- Keep barnacle HP/state and animal mood/reaction in deterministic game-domain logic that can be unit tested without rendering.
-- Use Zustand for cross-boundary session state such as selected mode/level, progress, score, health, timer status, and result. Keep transient pointer/particle state local to the game layer.
-- Emit domain events such as `barnacleDamaged`, `barnacleRemoved`, `animalReacted`, and `rescueCompleted`; make completion/removal idempotent.
-- Persist only versioned settings and unlocked/completed level summaries in localStorage. Validate reads and recover to defaults from invalid data.
+Body views own authored circle, rotated ellipse, capsule or polygon cleanable/spawn geometry with exclusions. Collision never comes from texture alpha. IDs are branded and scoped: rescue/stage/view/region/target identity is independent of labels, array positions and coordinates. Generated target IDs use rescue, typed seed and rescue-global generation order.
 
-The core target entity begins with this deliberately small contract:
+`rescueCatalog` is validated before resolved content is exported. `rescues` and the numeric `levels` projection retain the three frozen fixed rescues for compatibility and browser helpers. `playableRescues` adds Zen-only `wholeTurtleCare`, optional legacy identity, mode eligibility and explicit next-rescue references. The original three-rescue next chain is preserved. All four IDs are valid save identities independently of the selected mode.
 
-```ts
-type BarnacleType = "normal" | "hard";
-type BarnacleState = "intact" | "cracked" | "breaking" | "removed";
+`generateRescueLayout(content, seed)` produces immutable placements. It preserves fixed layouts, selects weighted regions within capacity, allocates exact count/type totals, checks full target/hit footprints and spacing, samples with bounded attempts, and uses deterministic authored-anchor fallback. Preparation errors are caught before mounting and provide a recoverable selection-screen message. The scene consumes prepared runs for both fixed and generated content; `rescueBarnacles()` remains a compatibility helper, not the scene state source.
 
-type Barnacle = {
-  id: string;
-  type: BarnacleType;
-  x: number;
-  y: number;
-  size: number;
-  hp: number;
-  maxHp: number;
-  state: BarnacleState;
-};
-```
+## Rendering, input and lifecycle
 
-Derive `cracked` from an HP threshold, enter `breaking` once at zero HP, then mark `removed` after detachment feedback. Removed targets cannot take damage or update progress again.
+Each mounted run owns its Pixi Application, world, targets, input and transient effects. Navigation/replay destroys the old scene. The vector scene is usable before asynchronous raster loading; failed texture loading keeps the fallback. Asset dimensions affect presentation only, with configured coordinates and hit geometry remaining authoritative.
 
-### Formal-development content contracts
+The scene attaches its complete display tree to the application before awaiting renderer initialization. Destruction is idempotent; cancellation while initialization is pending waits for initialization to settle, then destroys the renderer and all children without publishing gameplay callbacks. Initialization rejection releases the owned display tree. Run teardown uses `{ removeView: true }` rather than the boolean `true`, preserving Pixi's page-level resource pools while releasing the run's WebGL context. Active pointer capture is released before renderer destruction.
 
-FD-102 introduces immutable definitions in `src/levels/rescueDefinitions.ts`. A `RescueDefinition` explicitly selects one `AnimalDefinition` and one `EnvironmentDefinition`, so supported pairings come from authored rescues rather than an animal/environment Cartesian product. Ordered `RescueStage` entries reference body views owned by that animal. Each stage declares either authored fixed targets for MVP compatibility or eligible spawn regions for later seeded generation.
+Pointer Events share mouse/pen/touch handling and capture the active pointer. Accepted movement samples intersect target circles; stationary input and large jumps do not behave as scraping. Generated stages use the larger of visual radius, configured design-space minimum radius scaled into scene coordinates, and 12 screen pixels. Fixed stages retain their original visual-radius/12px rule. Body-view presentation and viewport anchor are configured; full-body views use a centered anchor while the frozen view retains its prior vertical offset.
 
-`BodyViewDefinition` owns cleanable and spawn regions. FD-103 supplies its default `CleanableGeometry` union: circle, rotated ellipse, oriented capsule, or polygon, all in authored design coordinates. Deterministic helpers test points, full circular target footprints, exclusion overlap, and the larger of visual or configured minimum hit radius. Geometry is never inferred from texture alpha. `SpawnProfile` holds rescue-wide count, affected-region limits, size/spacing, minimum hit radius, and bounded-attempt tuning. `TargetPlacement` represents an immutable generated or authored case layout and deliberately excludes mutable HP, damage state, progress, and reactions; those remain per-run domain state. The resolver checks direct rescue, animal, environment, and body-view references; FD-108 adds complete authored compatibility validation, and FD-109 validates seeded output during generation.
+Current single-stage Challenge uses monotonic elapsed time, including background-tab time, and configured active-view cleanable regions. Zen multi-area transitions retain one Pixi Application, block input for 0.45 seconds (one ticker update with reduced motion), activate the next view's playable vector fallback, and then load its raster asynchronously. A view epoch and destruction flag protect all texture application. Old targets, particles and temporary reactions are cleared while overall mood remains. A ResizeObserver resizes the renderer and relays layout updates when the React area panel changes its container.
 
-FD-104 uses branded, scoped string identifiers from `src/domain/identifiers.ts`. Rescue, animal, and environment keys are explicit authored kebab-case values; stage IDs are scoped by rescue, views by animal, and cleanable/spawn regions by view. Labels and array positions never define content identity. Authored target IDs are rescue-scoped. Generated target IDs use only rescue ID, typed seed, and rescue-global generation order, never display coordinates. Reusing a seed reproduces IDs, and duplicate target IDs are rejected across all fixed stages before content resolves. The existing unique-removal ledger therefore remains idempotent across stage boundaries. Full configuration validation and seeded generation remain assigned to FD-108 and FD-109 respectively.
+One page-lifetime Web Audio context is created/resumed after an opted-in gameplay gesture. React updates sound without remounting the scene. Reduced-motion lowers particle density and disables target wobble. The app root currently omits StrictMode because of the imperative renderer's development effect lifecycle.
 
-FD-105 migrates Gentle Start, Shell Care, and Full Rescue to explicit, fixed-placement, one-stage definitions. React selects a `ConfiguredRescue`, resolves its declared animal/environment/view content, and passes that resolved content through `GameViewport` to the Pixi scene. Scene target creation, Challenge tuning, turtle asset, and background asset come from this path without rescue- or animal-specific branches. The numeric level projection is derived from the same definitions only for save-version-1 compatibility and browser test coordinates; FD-107 will replace its persistence role.
+## Persistence
 
-FD-106 removes the scene's hard-coded shell ellipse from Challenge health logic. Accepted pointer samples are transformed from screen space into the active body view's design coordinates, then tested against the union of configured cleanable regions with exclusions removed. Target contact continues to reset unsafe-distance accumulation; samples outside configured surfaces contribute no bare-body distance.
+Save version 2 contains settings and completion summaries keyed by stable `RescueId`. A valid v1 numeric payload migrates through the explicit legacy mapping and is rewritten when storage permits. Invalid/unknown/duplicate/unsupported payloads recover atomically to defaults; storage failures do not block play. Challenge keeps the highest score and grade, Zen records completion. Active targets, stages, seeds and layouts are never serialized.
 
-FD-107 introduces save version 2. Completion entries use stable `RescueId` values rather than numeric compatibility IDs. Loading validates the complete payload against the configured rescue identity map; a valid version-1 payload migrates its settings, Zen completion, and best Challenge result through the explicit legacy-level-to-rescue mapping and is rewritten as version 2 when storage permits. Invalid, unknown, duplicate, or unsupported data falls back atomically to defaults, and no active-run state is serialized.
+`SaveIdentity` now requires a stable rescue ID and permits an optional legacy numeric ID. Current IDs are indexed independently from the v1 mapping, so Whole Turtle Care has no invented legacy number. The existing v2 schema can store its Zen success without a version bump.
 
-```ts
-type SaveDataV2 = {
-  version: 2;
-  settings: { soundEnabled: boolean; mode: "challenge" | "zen" };
-  completions: Array<{
-    rescueId: RescueId;
-    zenCompleted: boolean;
-    challengeBest: { score: number; grade: "S" | "A" | "B" | "C" } | null;
-  }>;
-};
-```
+## Integrated Zen flow and remaining Challenge work
 
-FD-108 validates the authored catalog once before resolved rescues are exported. The validator checks identifier uniqueness and scope, cross-references, geometry and exclusions, positive tuning, fallback anchors, fixed target totals and hard mix, size bounds, region capacity, containment, and hit-area separation. Generated stages are limited here to structural region-reference validation; target allocation and seeded output validation belong to FD-109. Existing domain and persistence tests remain the source of truth for progress/completion idempotence and save migration, while the complete browser suite guards observable desktop and narrow behavior.
+`RescueRun` owns immutable prepared placements and fresh per-target barnacle state, active/completed stages, removal-based progress, and idempotent transition/completion flags. Its path is `playing → awaiting-next-stage → transitioning → playing/complete`. Replay retains the seed and reconstructs fresh state; abandonment retains nothing. It does not currently own Challenge failure, reactions or celebration timing.
 
-FD-109 adds the pure `generateRescueLayout` preparation boundary. It accepts resolved content plus a typed seed and returns immutable `TargetPlacement` data for every stage. Fixed targets pass through unchanged. Generated stages use deterministic weighted region selection, exact capacity/type allocation, geometry-bounded sampling, configured touch radius and spacing, and finite authored-anchor fallback. Target IDs depend only on rescue, typed seed, and global generation order. An impossible definition or seed/layout combination raises `PlacementGenerationError` before scene creation. The generator does not own HP, damage, progress, reactions, navigation, or active-run persistence, and player-flow integration remains deferred to FD2.
+Slice 1A integration boundary:
 
-FD-201 provides the first concrete consumer contract in `TURTLE_BODY_REGION_MAP.md` without changing runtime code. **Whole Turtle Care** uses a `dorsal-full-body` definition that reuses the existing dorsal art, plus a new ventral view, two ordered generated stages, and eight eligible spawn regions. The separate dorsal definition preserves the shell-only cleanable surface and Challenge behavior of the three frozen rescues. Ten targets across exactly seven regions use capacity constraints to guarantee a 6–7 dorsal / 3–4 ventral split without adding stage quota fields to `RescueStage` or special cases to the generator. Visible but target-ineligible ventral throat/flipper surfaces remain cleanable for consistent Challenge feedback. FD-202 owns the new asset/fallback; FD-203 onward own run and UI integration.
+- React retains the prepared session and seed across the run; scene-local runtime run and animal state survive view changes. Replay prepares fresh state from the retained seed; selection/next rescue prepares a fresh seed.
+- Pixi consumes only the active stage and updates the run through deterministic operations. Each target view's barnacle getter reads current run state, avoiding a second HP/progress ledger.
+- React receives stage/overall summaries and issues the next-area action through the viewport handle. Focus moves to Next area on intermediate completion and to the area heading on view entry.
+- Asset callbacks carry view/run identity checks; input and transient feedback are cleared before activating a new view. Each missing asset uses the corresponding view's fallback.
+- Multi-stage Challenge is blocked at selection and preparation until 1B separates countdown consumption from monotonic combo time and verifies carryover/failure. Waiting for Next area will consume countdown; view switching will pause countdown but not combo expiry.
+- Domain `complete` is not the same as result presentation: the coordinator handles final success/failure, celebration and unique completion writes.
 
-FD-202 adds a ventral base sprite and a presentation-selectable `TurtleView` without changing the current scene's default dorsal behavior. Each presentation starts in vector mode and swaps to its centered 700 × 466 raster only after a texture is supplied, so a missing ventral request cannot produce an empty animal. The fallback is presentation geometry only: cleanable/spawn regions and collision remain configuration-owned and independent of texture alpha. FD-204 will bind the active resolved body view to this presentation boundary and guard asynchronous view changes.
-
-FD-203 adds the session-only `RescueRun` preparation and state boundary. Preparation consumes `generateRescueLayout`, rejects missing/unknown stage targets, and creates fresh barnacle HP/state grouped by configured stage. Immutable updates allow damage and detachment only in the active playable stage; derive current and target-weighted overall progress; and lock intermediate stage completion, transitions, and final rescue completion once. Replay rebuilds from the retained seed, while abandonment returns `null` and no active layout enters persistence. `Whole Turtle Care` is now a validated catalog entry and direct run-preparation input, but the compatibility `rescues`/`levels` exports intentionally remain the three player-visible MVP rescues until FD-204/FD-205 integrate the new flow.
-
-## Input and timing
-
-Use Pointer Events so mouse, pen, and touch share one path. Capture the active pointer during a scrape. Damage depends on sampled movement intersecting a barnacle, with distance/time caps to avoid event-rate exploits and large pointer jumps. Game timers use elapsed time rather than render-frame counts.
-
-## Suggested source shape
-
-```text
-src/
-├── app/             React screens and navigation
-├── game/            Pixi scene, input, rendering, feedback
-├── domain/          deterministic entities, rules, events
-├── levels/          LevelConfig data
-├── state/           Zustand stores and persistence adapter
-└── styles/          application CSS
-```
-
-This is a starting boundary, not a reason to create unused files or layers.
-
-## Delivery order
-
-M9 introduced a small deterministic adapter in `src/state/persistence.ts` rather than adding a state library solely for persistence. FD-107 now makes React consume and write complete version-2 snapshots keyed by stable rescue IDs, with strict version-1 migration. Challenge retains the highest score and its grade, Zen records completion, and active scene state is never serialized.
-
-M8 keeps low-frequency transient particles and target wobble local to each Pixi scene. Each run owns and destroys its Pixi Application, world, input and game state. A single page-lifetime Web Audio context is created or resumed only after an opted-in gameplay pointer gesture; individual cues remain short-lived and rate-limited. React owns the session-level sound toggle and updates the live scene without remounting it. The app root does not use React StrictMode because its development-only effect replay is not useful for the imperative renderer lifecycle. Reduced-motion preference lowers particle density and omits target wobble; persistence of the sound choice belongs to M9.
-
-M7 adds a React-owned main-menu state before the combined mode/level screen. Returning home clears the selected level, unmounts the viewport and preserves the selected mode. No game scene runs behind a menu. Native details/summary provide instructions; the HUD exposes progressbar semantics and results remain scrollable within the rescue card.
-
-M6 passes a `GameMode` from React through the viewport into each new scene. Zen gates Challenge time, unsafe-shell penalties and score recording at the scene boundary; shared target damage, removal, progress and animal state remain unchanged. React conditionally renders mode-specific selection text, HUD and result details. Mode changes occur outside gameplay, after destroying the old scene.
-
-M5 uses React-local navigation and session summaries with stable callbacks at the viewport boundary. Each scene receives an immutable `LevelConfig` and creates fresh target and Challenge state. Deterministic Challenge rules live in `src/domain/challenge.ts`; the scene supplies elapsed monotonic time before ticks and input, and publishes HUD changes only at displayed-second or status/score/health/combo changes. Selecting/replaying/advancing remounts the scene; leaving gameplay destroys it. Zustand remains deferred until state sharing requires it.
-
-M0 bootstrap → M1 one interactive barnacle → M2 barnacle system → M3 animal reactions → M4 three levels → M5 Challenge → M6 Zen → M7 shell/HUD/results → M8 juice/audio → M9 persistence. M10 QA/deployment was explicitly skipped on 2026-09-15; formal development now follows `FORMAL_DEVELOPMENT.md` without treating M10 as complete.
+Approved behavior is in [MULTI_AREA_RESCUE_SPEC](MULTI_AREA_RESCUE_SPEC.md); concrete geometry/art contracts are in [TURTLE_BODY_REGION_MAP](TURTLE_BODY_REGION_MAP.md). Execute according to [FORMAL_ROADMAP](FORMAL_ROADMAP.md), preserving the three existing rescues as regression constraints.

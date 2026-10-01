@@ -37,6 +37,12 @@ function validateBodyView(animalId: string, view: BodyViewDefinition): void {
   if (!isPositiveFinite(view.designSize.width) || !isPositiveFinite(view.designSize.height)) {
     invalid(`Body view ${view.id} must have a positive finite design size`);
   }
+  if (view.presentation !== undefined && view.presentation !== "dorsal" && view.presentation !== "ventral") {
+    invalid(`Body view ${view.id} has an unsupported presentation`);
+  }
+  if (view.viewportAnchor && [view.viewportAnchor.x, view.viewportAnchor.y].some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
+    invalid(`Body view ${view.id} has an invalid viewport anchor`);
+  }
   if (view.cleanableRegions.length === 0) invalid(`Body view ${view.id} must define a cleanable region`);
   assertUnique(view.cleanableRegions.map((region) => region.id), `cleanable region on ${view.id}`);
   assertUnique(view.spawnRegions.map((region) => region.id), `spawn region on ${view.id}`);

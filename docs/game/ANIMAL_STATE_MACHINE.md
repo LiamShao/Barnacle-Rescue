@@ -2,6 +2,8 @@
 
 Mood and reaction are independent dimensions. Mood persists from cleaning progress; reaction temporarily overrides or layers animation, then returns to the current mood. Never use a reaction to store progress.
 
+Current behavior includes the three single-stage rescues and Zen-only Whole Turtle Care. Multi-stage mood derives from overall target-weighted progress; intermediate stage completion retains relief and never celebrates. View entry clears the old temporary reaction while keeping mood, and only final rescue completion celebrates. Multi-stage Challenge remains pending; see [active roadmap](FORMAL_ROADMAP.md).
+
 ```ts
 type AnimalMood = "sad" | "neutral" | "relaxed" | "happy";
 type AnimalReaction = "idle" | "relief" | "hurt" | "celebrate";

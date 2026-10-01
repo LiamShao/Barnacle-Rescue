@@ -2,13 +2,15 @@
 
 ## Status and authority
 
-This document approves the concrete content plan for `FD-201`. It is the source of truth for the first generated, multi-area sea-turtle rescue described by `MULTI_AREA_RESCUE_SPEC.md`. FD-203 now materializes this definition in the validated production catalog and can prepare its complete session state, but the rescue remains outside player selection until later FD2 integration.
+This document approves the concrete content plan for `FD-201` and remains the content source of truth for Whole Turtle Care. Slice 1A now exposes the validated generated rescue in Zen, including both views, next-area controls, total progress, same-seed replay and final completion saving. Multi-area Challenge and real-device acceptance are still pending; current verification is recorded in `ACCEPTANCE_CRITERIA.md`.
 
 The first slice uses the existing normal and hard barnacle mechanics only. It does not add wounds, tools, optional areas, free view selection, or a third body view.
 
 ## Coordinate and view contract
 
 Both views use the existing 820 × 540 design space with origin at the turtle pivot, positive x toward the head, and positive y toward the bottom of the screen. Geometry is authoritative and independent of texture alpha.
+
+The integrated full-body dorsal and ventral views both use viewport anchor `(0.5, 0.5)`. The frozen shell-only view retains `(0.5, 0.55)`. Presentation and anchors are explicit view configuration; a ResizeObserver keeps renderer size, target coordinates, and pointer conversion aligned when React's area panel changes the canvas container.
 
 - `animal/sea-turtle/view/dorsal` remains the frozen shell-only compatibility view for Gentle Start, Shell Care, and Full Rescue.
 - `animal/sea-turtle/view/dorsal-full-body` reuses the existing head-right raster, pivot, size, and vector presentation while adding the multi-area region map below. Keeping a separate view definition prevents the three frozen rescues from gaining new bare-body penalty surfaces. Animal-left appears at negative y and animal-right at positive y. The current 1024 × 682 texture remains centered and displayed at 700 × 466 design units.

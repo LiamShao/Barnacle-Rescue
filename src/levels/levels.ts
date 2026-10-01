@@ -139,6 +139,8 @@ const shallowOceanId = environmentId("shallow-ocean");
 const dorsalCompatibilityView: BodyViewDefinition = {
   id: dorsalViewId,
   name: "Shell",
+  presentation: "dorsal",
+  viewportAnchor: { x: 0.5, y: 0.55 },
   asset: { src: "/assets/game/turtle_body_base_v2.png", fallback: "vector" },
   designSize: { width: 820, height: 540 },
   cleanableRegions: [{
@@ -160,6 +162,8 @@ const dorsalCompatibilityView: BodyViewDefinition = {
 const dorsalFullBodyView: BodyViewDefinition = {
   id: dorsalFullBodyViewId,
   name: "Back and flippers",
+  presentation: "dorsal",
+  viewportAnchor: { x: 0.5, y: 0.5 },
   asset: { src: "/assets/game/turtle_body_base_v2.png", fallback: "vector" },
   designSize: { width: 820, height: 540 },
   cleanableRegions: [
@@ -255,6 +259,8 @@ const dorsalFullBodyView: BodyViewDefinition = {
 const ventralView: BodyViewDefinition = {
   id: ventralViewId,
   name: "Underside",
+  presentation: "ventral",
+  viewportAnchor: { x: 0.5, y: 0.5 },
   asset: { src: "/assets/game/turtle_body_ventral_v4.png", fallback: "vector" },
   designSize: { width: 820, height: 540 },
   cleanableRegions: [
@@ -386,12 +392,21 @@ export const wholeTurtleCareDefinition: RescueDefinition = {
       id: stageId(wholeTurtleCareId, "back-and-flippers"),
       name: "Back and flippers",
       bodyViewId: dorsalFullBodyViewId,
+      copy: {
+        instruction: "Scrape the barnacles from the back and flippers.",
+        completionSupport: "One more area to check underneath.",
+        transitionStatus: "Turning the turtle gently…",
+      },
       placement: { kind: "generated", spawnRegionIds: Object.values(dorsalFullBodySpawnIds) },
     },
     {
       id: stageId(wholeTurtleCareId, "underside"),
       name: "Underside",
       bodyViewId: ventralViewId,
+      copy: {
+        instruction: "Finish the rescue by cleaning the underside.",
+        arrivalStatus: "Underside ready. Keep scraping.",
+      },
       placement: { kind: "generated", spawnRegionIds: Object.values(ventralSpawnIds) },
     },
   ],
@@ -426,6 +441,23 @@ export const rescues: readonly ConfiguredRescue[] = authoredRescues.map((authore
   legacyLevelId: authored.legacyLevelId,
   content: resolveRescueContent(rescueCatalog, definitions[index].id),
 }));
+
+export type PlayableRescue = Readonly<{
+  content: ResolvedRescueContent;
+  legacyLevelId?: number;
+  modes: readonly ("zen" | "challenge")[];
+  nextRescueId?: RescueDefinition["id"];
+}>;
+
+/** Keep the frozen three-rescue next chain; the new care case is selected separately. */
+export const playableRescues: readonly PlayableRescue[] = [
+  ...rescues.map((rescue, index) => ({
+    ...rescue,
+    modes: ["challenge", "zen"] as const,
+    nextRescueId: rescues[index + 1]?.content.rescue.id,
+  })),
+  { content: wholeTurtleCare, modes: ["zen"] },
+];
 
 export function rescueBarnacles(rescue: RescueDefinition): BarnacleConfig[] {
   return rescue.stages.flatMap((stage) => {

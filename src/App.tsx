@@ -1,11 +1,14 @@
-import { useCallback, useState } from "react";
-import { GameViewport } from "./game/GameViewport";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { GameViewport, type GameViewportHandle } from "./game/GameViewport";
 import { animalDescription, createAnimal } from "./domain/animal";
-import { rescues, type ConfiguredRescue } from "./levels/levels";
+import { playableRescues, rescues, type PlayableRescue } from "./levels/levels";
 import { challengeGrade, challengeScore, createChallenge } from "./domain/challenge";
 import { loadSave, recordCompletion, withSettings, writeSave, type RescueCompletion, type SaveData } from "./state/persistence";
+import { prepareRescueSession, type RescueSession } from "./state/rescueSession";
+import { summarizeRescueRun, type RescueRunSummary } from "./state/rescueRun";
+import type { RescueSeed } from "./levels/generatedPlacement";
 
-const saveIdentities = rescues.map((rescue) => ({
+const saveIdentities = playableRescues.map((rescue) => ({
   legacyLevelId: rescue.legacyLevelId,
   rescueId: rescue.content.rescue.id,
 }));
@@ -22,24 +25,57 @@ export default function App() {
   const [complete, setComplete] = useState(false);
   const [runId, setRunId] = useState(0);
   const [animal, setAnimal] = useState(createAnimal);
-  const [selectedRescue, setSelectedRescue] = useState<ConfiguredRescue | null>(null);
+  const [selectedRescue, setSelectedRescue] = useState<PlayableRescue | null>(null);
+  const [session, setSession] = useState<RescueSession | null>(null);
+  const [runSummary, setRunSummary] = useState<RescueRunSummary | null>(null);
+  const [startError, setStartError] = useState(false);
+  const viewportRef = useRef<GameViewportHandle>(null);
+  const nextAreaRef = useRef<HTMLButtonElement>(null);
+  const areaHeadingRef = useRef<HTMLHeadingElement>(null);
   const [save, setSave] = useState(() => loadSave(window.localStorage, saveIdentities));
   const mode = save.settings.mode;
   const soundEnabled = save.settings.soundEnabled;
   const [atHome, setAtHome] = useState(true);
-  const goHome = () => {
+  const leaveRescue = () => {
     setSelectedRescue(null);
+    setSession(null);
+    setRunSummary(null);
+    setStartError(false);
+  };
+  const goHome = () => {
+    leaveRescue();
     setAtHome(true);
   };
   const [challenge, setChallenge] = useState(() => createChallenge(rescues[0].content.rescue.challenge));
-  const startRescue = (next: ConfiguredRescue) => {
+  const startRescue = (next: PlayableRescue, seed?: RescueSeed) => {
+    let prepared: RescueSession;
+    try {
+      prepared = prepareRescueSession(next.content, mode, seed);
+    } catch {
+      leaveRescue();
+      setStartError(true);
+      return;
+    }
     setSelectedRescue(next);
+    setSession(prepared);
+    setRunSummary(summarizeRescueRun(prepared.initialRun));
+    setStartError(false);
     setChallenge(createChallenge(next.content.rescue.challenge));
     setRemaining(100);
     setComplete(false);
     setAnimal(createAnimal());
     setRunId((id) => id + 1);
   };
+  const onSceneError = useCallback(() => {
+    setSession(null);
+    setSelectedRescue(null);
+    setRunSummary(null);
+    setStartError(true);
+  }, []);
+  useEffect(() => {
+    if (runSummary?.status === "awaiting-next-stage") nextAreaRef.current?.focus();
+    if (runSummary?.status === "playing" && runSummary.activeStageIndex > 0) areaHeadingRef.current?.focus();
+  }, [runSummary?.status, runSummary?.activeStageIndex]);
   const onDamage = useCallback((percent: number) => setRemaining(percent), []);
   const updateSave = useCallback((update: (current: SaveData) => SaveData) => {
     setSave((current) => {
@@ -101,6 +137,10 @@ export default function App() {
         <header className="hud"><div><p className="eyebrow">A little care goes a long way</p><h1>Barnacle Rescue</h1></div>{soundToggle}</header>
         <section className="level-select" aria-labelledby="level-heading">
           <h2 id="level-heading">Choose a rescue</h2>
+          {startError && <div role="alert" className="rescue-error">
+            <p>This rescue couldn't get ready. Please choose a rescue to try again.</p>
+            <button className="levels-button" onClick={() => setStartError(false)} autoFocus>Choose another rescue</button>
+          </div>}
           <button className="levels-button" onClick={goHome}>Main menu</button>
           <div className="mode-select" role="group" aria-label="Game mode">
             <button aria-pressed={mode === "challenge"} onClick={() => updateSave((current) => withSettings(current, { mode: "challenge" }))}>Challenge</button>
@@ -108,17 +148,17 @@ export default function App() {
           </div>
           <p>{mode === "challenge" ? "Clean every barnacle before time runs out. Scraping bare shell costs health; lift the scraper to move between targets." : "Take your time. No timer, no health loss, no scores. Just gentle scraping and a happier turtle."}</p>
           <div className="level-grid">
-            {rescues.map((option, index) => {
+            {playableRescues.filter((option) => option.modes.includes(mode)).map((option, index) => {
               const definition = option.content.rescue;
               const completion = save.completions.find((item) => item.rescueId === definition.id);
               return (
-                <button className="level-option" key={definition.id} onClick={() => startRescue(option)} autoFocus={index === 0}>
-                  <span className="eyebrow">Rescue {option.legacyLevelId}</span>
+                <button className="level-option" key={definition.id} onClick={() => startRescue(option)} autoFocus={index === 0 && !startError}>
+                  <span className="eyebrow">{option.legacyLevelId ? `Rescue ${option.legacyLevelId}` : `${definition.stages.length} areas · Zen`}</span>
                   <strong>{definition.name}</strong>
                   <span>{definition.description}</span>
                   <span className="level-count">{definition.spawnProfile.targetCount} barnacles · {definition.spawnProfile.hardTargetCount} hard</span>
                   {mode === "challenge" && <span>{definition.challenge.timeLimitSeconds}s · {definition.challenge.animalHealth} health</span>}
-                  {completion && <span className="completion-summary" data-testid={`level-progress-${option.legacyLevelId}`}>{completionLabel(completion)}</span>}
+                  {completion && <span className="completion-summary" data-testid={option.legacyLevelId ? `level-progress-${option.legacyLevelId}` : `rescue-progress-${definition.id}`}>{completionLabel(completion)}</span>}
                 </button>
               );
             })}
@@ -128,17 +168,20 @@ export default function App() {
     );
   }
   const definition = selectedRescue.content.rescue;
-  const nextRescue = rescues[rescues.indexOf(selectedRescue) + 1];
+  const nextRescue = playableRescues.find((option) => option.content.rescue.id === selectedRescue.nextRescueId && option.modes.includes(mode));
+  const multiArea = definition.stages.length > 1;
+  const activeStage = definition.stages[runSummary?.activeStageIndex ?? 0];
+  const nextStage = definition.stages[(runSummary?.activeStageIndex ?? 0) + 1];
   const failed = mode === "challenge" && (challenge.status === "timeout" || challenge.status === "health");
   const resultVisible = complete || failed;
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${multiArea ? " has-area" : ""}`}>
       <header className="hud">
         <div>
-          <p className="eyebrow" data-testid="level-title">{mode === "challenge" ? "Challenge" : "Zen"} · {definition.name} · Rescue {selectedRescue.legacyLevelId} · {definition.spawnProfile.targetCount} barnacles</p>
+          <p className="eyebrow" data-testid="level-title">{mode === "challenge" ? "Challenge" : "Zen"} · {definition.name}{selectedRescue.legacyLevelId ? ` · Rescue ${selectedRescue.legacyLevelId}` : ""} · {definition.spawnProfile.targetCount} barnacles</p>
           <h1>Barnacle Rescue</h1>
-          <button className="levels-button" onClick={() => setSelectedRescue(null)} autoFocus>Choose rescue</button>
+          <button className="levels-button" onClick={leaveRescue} autoFocus>Choose rescue</button>
           <button className="levels-button" onClick={goHome}>Main menu</button>
         </div>
         {soundToggle}
@@ -157,8 +200,22 @@ export default function App() {
         </div>}
       </header>
 
+      {multiArea && runSummary && <section className="area-panel" aria-label="Care area">
+        <h2 ref={areaHeadingRef} tabIndex={-1} data-testid="area-title">Area {runSummary.activeStageIndex + 1} of {runSummary.stageCount} · {runSummary.stageName}</h2>
+        <p>{activeStage.copy?.instruction}</p>
+        <div role="progressbar" aria-label="Current area progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={runSummary.currentProgress}>Current area: {runSummary.currentProgress}%</div>
+        <p role="status" data-testid="area-status">{runSummary.status === "transitioning"
+          ? activeStage.copy?.transitionStatus ?? "Changing care area…"
+          : runSummary.status === "playing" && runSummary.activeStageIndex > 0 ? activeStage.copy?.arrivalStatus : ""}</p>
+        {runSummary.status === "awaiting-next-stage" && nextStage && <div>
+          <h3>{activeStage.name} clear</h3>
+          <p>{activeStage.copy?.completionSupport}</p>
+          <button ref={nextAreaRef} className="replay-button" onClick={() => viewportRef.current?.nextArea()}>Next area: {nextStage.name}</button>
+        </div>}
+      </section>}
+
       <section className={`rescue-card ${resultVisible ? "is-complete" : ""}`}>
-        <GameViewport key={runId} mode={mode} content={selectedRescue.content} soundEnabled={soundEnabled} onDamage={onDamage} onComplete={onComplete} onAnimalChange={setAnimal} onChallengeChange={setChallenge} />
+        {session && <GameViewport ref={viewportRef} key={runId} mode={mode} content={selectedRescue.content} initialRun={session.initialRun} soundEnabled={soundEnabled} onDamage={onDamage} onComplete={onComplete} onAnimalChange={setAnimal} onChallengeChange={setChallenge} onRunChange={setRunSummary} onSceneError={onSceneError} />}
         {!resultVisible && <p className="animal-status" role="status" data-testid="animal-status" data-mood={animal.mood} data-reaction={animal.reaction}>{animalDescription(animal)}</p>}
         <p className="instruction">{mode === "challenge" ? "Scrape barnacles, not bare shell. Lift to switch targets. Gray shells take more scraping." : "Gently drag back and forth over each barnacle. There is no rush."}</p>
         {resultVisible && (
@@ -168,11 +225,12 @@ export default function App() {
             <p>{failed ? challenge.status === "timeout" ? "Time ran out." : "The turtle needs a rest. Avoid scraping bare shell." : "The turtle is feeling much better."}</p>
             {mode === "challenge" && <p>Score: {challengeScore(challenge)}{complete && <span data-testid="grade"> · Grade {challengeGrade(challenge, definition.challenge.parScore)}</span>}</p>}
             {mode === "challenge" && complete && <p>Time bonus: {Math.floor(challenge.remaining) * 10} · Combo bonus: {challenge.comboBonus}</p>}
-            {complete && !nextRescue && <p>You finished the final rescue.</p>}
+            {complete && !nextRescue && !multiArea && <p>You finished the final rescue.</p>}
+            {complete && multiArea && <p>Areas cared for: {definition.stages.map((stage) => stage.name).join(" · ")}</p>}
             <div className="result-actions">
-              <button className="replay-button" onClick={() => startRescue(selectedRescue)} autoFocus>Rescue again</button>
+              <button className="replay-button" onClick={() => startRescue(selectedRescue, session?.initialRun.seed)} autoFocus>Rescue again</button>
               {complete && nextRescue && <button className="replay-button" onClick={() => startRescue(nextRescue)}>Next rescue</button>}
-              <button className="replay-button" onClick={() => setSelectedRescue(null)}>Choose rescue</button>
+              <button className="replay-button" onClick={leaveRescue}>Choose rescue</button>
               <button className="replay-button" onClick={goHome}>Main menu</button>
             </div>
           </div>

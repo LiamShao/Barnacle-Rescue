@@ -2,6 +2,8 @@
 
 ## Status and scope
 
+Implementation status as of 2026-10-01: slice 1A integrates Whole Turtle Care into Zen selection, generated targets, active views, stage navigation, overall mood, replay and final-only completion saving. The transition lasts 0.45 seconds (one ticker update under reduced motion), then activates a playable matching vector view while raster loading continues. Challenge transition timing, health/score carryover and real-device acceptance remain pending in 1B/1C. See [current baseline](FORMAL_DEVELOPMENT.md), [active roadmap](FORMAL_ROADMAP.md) and [verification](ACCEPTANCE_CRITERIA.md); shared Challenge rules below are approved targets, not implemented multi-area behavior.
+
 This document approves the shared player-visible behavior for `FD-101`. It is the behavior source of truth for multi-area rescue flow and the compatibility work in FD1–FD2; `TURTLE_BODY_REGION_MAP.md` supplies the concrete views, regions, tuning, and copy for the first rescue. Neither specification changes the frozen M1–M9 rescues by itself or authorizes new mechanics, optional-stage UI, free area selection, or active-run persistence.
 
 ## Player-visible model

@@ -8,6 +8,8 @@ Prototype art may be clean vector-like Pixi graphics or placeholders. Gameplay w
 
 ## Asset manifest
 
+This table is an art-production target list, not an inventory of delivered files. The implemented PNGs and ventral assets are listed in the implementation sections below. Separate facial/flipper sheets, authored breaking sprites, and audio clips are not delivered by this list.
+
 | Asset | Purpose | Approx. size | Alpha | Variants / convention |
 | --- | --- | ---: | :---: | --- |
 | Turtle body | Main shell/body silhouette | 1024×768 | Yes | `turtle_body_base.png` |
@@ -45,6 +47,8 @@ FD-201 selects one additional sea-turtle underside view for **Whole Turtle Care*
 - `TurtleView("ventral")` provides the complete vector fallback. It draws the plastron around `(-20, 0)`, the configured throat/head to the right, independently animated front/rear flippers, and the tail capsule from `(-205, 0)` to `(-285, 0)`. Procedural face and reaction layers remain above either base.
 - The runtime-ready tail base was deliberately enlarged around the approved tail fallback anchor. Final tuning must still be inspected with generated targets during FD-204/FD-211 because FD-202 does not create a player-visible multi-stage run.
 - Normal/hard target textures and state transitions are unchanged and remain independent overlays, so the new animal base reuses the existing target asset pipeline.
+
+Slice 1A now displays this ventral asset or its complete vector fallback in the Zen rescue. A single Pixi Application remains mounted while the stage changes; temporary effects and old target views are cleared, and asynchronous texture application checks view identity before swapping. Desktop/320px and fallback screenshots are inspected separately from real touch/audio acceptance; see `ACCEPTANCE_CRITERIA.md` for checks actually performed.
 
 ## Feedback targets
 

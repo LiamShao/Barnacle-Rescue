@@ -37,6 +37,8 @@ export type BodyViewDefinition<TGeometry = CleanableGeometry> = Readonly<{
   id: BodyViewId;
   name: string;
   asset: AssetReference;
+  presentation?: "dorsal" | "ventral";
+  viewportAnchor?: Readonly<{ x: number; y: number }>;
   designSize: Readonly<{ width: number; height: number }>;
   cleanableRegions: readonly CleanableRegion<TGeometry>[];
   spawnRegions: readonly SpawnRegion<TGeometry>[];
@@ -85,6 +87,12 @@ export type RescueStage = Readonly<{
   id: StageId;
   name: string;
   bodyViewId: BodyViewId;
+  copy?: Readonly<{
+    instruction: string;
+    completionSupport?: string;
+    transitionStatus?: string;
+    arrivalStatus?: string;
+  }>;
   placement:
     | Readonly<{ kind: "fixed"; targets: readonly FixedTargetPlacement[] }>
     | Readonly<{ kind: "generated"; spawnRegionIds: readonly SpawnRegionId[] }>;

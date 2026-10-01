@@ -39,6 +39,13 @@ function withFirstTarget(update: (target: FixedTargetPlacement) => FixedTargetPl
 }
 
 describe("rescue catalog validation", () => {
+  it("rejects non-finite and out-of-viewport presentation anchors", () => {
+    for (const x of [NaN, -0.1, 1.1]) {
+      expect(() => assertValidRescueCatalog(withFirstView((view) => ({
+        ...view, viewportAnchor: { x, y: 0.5 },
+      })))).toThrow("invalid viewport anchor");
+    }
+  });
   it("accepts the complete fixed-placement compatibility catalog", () => {
     expect(() => assertValidRescueCatalog(rescueCatalog)).not.toThrow();
   });

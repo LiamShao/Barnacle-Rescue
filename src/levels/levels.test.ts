@@ -8,9 +8,18 @@ import {
   rescueCatalog,
   rescues,
   wholeTurtleCare,
+  playableRescues,
 } from "./levels";
 
 describe("level configurations", () => {
+  it("offers Whole Turtle Care only in Zen with no fabricated legacy identity", () => {
+    const care = playableRescues.find((rescue) => rescue.content.rescue.id === wholeTurtleCare.rescue.id)!;
+    expect(care.modes).toEqual(["zen"]);
+    expect(care.legacyLevelId).toBeUndefined();
+    expect(care.nextRescueId).toBeUndefined();
+    expect(playableRescues[2].nextRescueId).toBeUndefined();
+    expect(wholeTurtleCare.stages.map(({ bodyView }) => bodyView.presentation)).toEqual(["dorsal", "ventral"]);
+  });
   it("resolves the MVP through three explicit one-stage rescue definitions", () => {
     expect(rescues.map((rescue) => rescue.content.rescue.id)).toEqual([
       "rescue/gentle-start",
@@ -37,7 +46,7 @@ describe("level configurations", () => {
     expect(totalHp[1]).toBeLessThan(totalHp[2]);
   });
 
-  it("keeps the prepared multi-stage rescue out of the frozen player selection", () => {
+  it("keeps the multi-stage rescue separate from the frozen three-rescue compatibility projection", () => {
     expect(rescueCatalog.rescues.map((rescue) => rescue.id)).toContain("rescue/whole-turtle-care");
     expect(wholeTurtleCare.rescue).toMatchObject({
       id: "rescue/whole-turtle-care",

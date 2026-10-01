@@ -1,7 +1,10 @@
 import { Application, Assets, Container, Graphics, Sprite, Texture } from "pixi.js";
-import { createBarnacle, damageBarnacle, finishDetachment, isRescueComplete, rescueProgress } from "../domain/barnacle";
-import { rescueBarnacles } from "../levels/levels";
 import type { ResolvedRescueContent } from "../levels/rescueDefinitions";
+import {
+  activeRescueStage, damageRescueTarget, finishRescueTargetDetachment,
+  finishStageTransition, overallRescueProgress, prepareRescueRun,
+  startStageTransition, summarizeRescueRun, type RescueRun, type RescueRunSummary,
+} from "../state/rescueRun";
 import { distance, isPointOnCleanableSurface, segmentIntersectsCircle, type Point } from "../domain/geometry";
 import { advanceAnimal, animalAfterRemoval, celebrationFinished, createAnimal, reactAnimal, type AnimalState } from "../domain/animal";
 import { advanceChallenge, challengeScore, createChallenge, recordRemoval, scrapeShell, type ChallengeState } from "../domain/challenge";
@@ -14,6 +17,7 @@ type SceneCallbacks = {
   onComplete: (challenge: ChallengeState) => void;
   onAnimalChange: (state: AnimalState) => void;
   onChallengeChange: (state: ChallengeState) => void;
+  onRunChange?: (summary: RescueRunSummary) => void;
 };
 
 const MIN_SCRAPE_DISTANCE = 3;
@@ -46,7 +50,7 @@ export class BarnacleScene {
   private readonly background = new Container();
   private readonly backgroundFallback = new Graphics();
   private readonly backgroundAsset = new Sprite();
-  private readonly turtle = new TurtleView();
+  private turtle: TurtleView;
   private readonly effects = new Container();
   private readonly audio = new AudioFeedback();
   private readonly particles: FeedbackParticle[] = [];
@@ -55,10 +59,17 @@ export class BarnacleScene {
   private animal = createAnimal();
   private clock = 0;
   private turtleCenterY = 0;
-  private readonly targets;
-  private createTargets(rescue: ResolvedRescueContent["rescue"]) {
-    return rescueBarnacles(rescue).map((config) => ({
-    barnacle: createBarnacle(config),
+  private run: RescueRun;
+  private targets;
+  private viewEpoch = 0;
+  private transitionElapsed = 0;
+  private resizeObserver: ResizeObserver | null = null;
+  private createTargets() {
+    const stageIndex = this.run.activeStageIndex;
+    const getBarnacle = (targetIndex: number) => this.run.stages[stageIndex].targets[targetIndex].barnacle;
+    return activeRescueStage(this.run).targets.map((target, targetIndex) => ({
+    id: target.placement.id,
+    get barnacle() { return getBarnacle(targetIndex); },
     view: new Container(),
     asset: new Sprite(),
     overlay: new Graphics(),
@@ -77,6 +88,7 @@ export class BarnacleScene {
   private completed = false;
   private destroyed = false;
   private initialized = false;
+  private starting = false;
   private challenge: ChallengeState;
   private lastTime = 0;
   private lastSummary = "";
@@ -86,31 +98,49 @@ export class BarnacleScene {
     private readonly callbacks: SceneCallbacks,
     private readonly content: ResolvedRescueContent,
     private readonly mode: GameMode,
+    initialRun: RescueRun = prepareRescueRun(content, "fixed-rescue"),
   ) {
-    this.targets = this.createTargets(content.rescue);
+    if (mode === "challenge" && content.stages.length > 1) throw new Error("Multi-area Challenge is not available yet");
+    this.run = initialRun;
+    this.turtle = new TurtleView(this.activeBodyView.presentation ?? "dorsal");
+    this.targets = this.createTargets();
     this.challenge = createChallenge(content.rescue.challenge);
-  }
-
-  async start(): Promise<void> {
-    await this.app.init({ resizeTo: this.host, antialias: true, backgroundAlpha: 0, resolution: window.devicePixelRatio });
-    this.initialized = true;
-    if (this.destroyed) {
-      this.app.destroy(true);
-      return;
-    }
-
-    this.app.canvas.setAttribute("aria-label", "Sea turtle rescue area");
-    this.app.canvas.setAttribute("role", "application");
-    this.app.canvas.style.touchAction = "none";
-    this.host.appendChild(this.app.canvas);
+    // Establish ownership before asynchronous renderer initialization so cancellation
+    // also destroys graphics which have never reached the canvas.
     this.background.addChild(this.backgroundFallback, this.backgroundAsset);
     for (const target of this.targets) target.view.addChild(target.asset, target.overlay);
     this.scraper.addChild(this.scraperFallback, this.scraperAsset);
     this.app.stage.addChild(this.world);
     this.world.addChild(this.background, this.turtle, ...this.targets.map((target) => target.view), this.effects, this.scraper);
+  }
+
+  async start(): Promise<void> {
+    if (this.destroyed || this.starting) return;
+    this.starting = true;
+    try {
+      await this.app.init({ resizeTo: this.host, antialias: true, backgroundAlpha: 0, resolution: window.devicePixelRatio });
+    } catch (error) {
+      this.destroy();
+      this.app.stage.destroy({ children: true });
+      throw error;
+    }
+    this.initialized = true;
+    if (this.destroyed) {
+      this.app.destroy({ removeView: true }, { children: true });
+      this.initialized = false;
+      return;
+    }
+
+    this.app.canvas.setAttribute("aria-label", "Sea turtle rescue area");
+    this.app.canvas.setAttribute("role", "application");
+    this.app.canvas.dataset.bodyView = this.activeBodyView.presentation ?? "dorsal";
+    this.app.canvas.dataset.animalAsset = "vector";
+    this.app.canvas.style.touchAction = "none";
+    this.host.appendChild(this.app.canvas);
     this.drawScraper();
     this.layout();
     this.callbacks.onAnimalChange(this.animal);
+    this.publishRun();
     this.lastTime = performance.now();
     this.publishChallenge();
 
@@ -120,26 +150,90 @@ export class BarnacleScene {
     this.app.canvas.addEventListener("pointercancel", this.onPointerEnd);
     this.app.canvas.addEventListener("lostpointercapture", this.onPointerEnd);
     window.addEventListener("resize", this.layout);
+    this.resizeObserver = new ResizeObserver(() => {
+      if (this.destroyed) return;
+      this.app.resize();
+      this.layout();
+    });
+    this.resizeObserver.observe(this.host);
     this.app.ticker.add(this.tick);
     void this.loadAssets();
   }
 
   destroy(): void {
+    if (this.destroyed) return;
     this.destroyed = true;
     this.audio.destroy();
+    this.resizeObserver?.disconnect();
     window.removeEventListener("resize", this.layout);
-    if (!this.initialized) return;
+    if (!this.initialized) {
+      if (!this.starting) this.app.stage.destroy({ children: true });
+      return;
+    }
     const canvas = this.app.canvas;
     canvas.removeEventListener("pointerdown", this.onPointerDown);
     canvas.removeEventListener("pointermove", this.onPointerMove);
     canvas.removeEventListener("pointerup", this.onPointerEnd);
     canvas.removeEventListener("pointercancel", this.onPointerEnd);
     canvas.removeEventListener("lostpointercapture", this.onPointerEnd);
-    this.app.destroy(true, { children: true });
+    this.stopInput();
+    // Destroy this renderer and its context, retaining Pixi's page-level pools
+    // for subsequent rescues rather than releasing global resources per run.
+    this.app.destroy({ removeView: true }, { children: true });
+    this.initialized = false;
   }
 
   setSoundEnabled(enabled: boolean): void {
     this.audio.setEnabled(enabled);
+  }
+
+  private get activeBodyView() {
+    return this.content.stages[this.run.activeStageIndex].bodyView;
+  }
+
+  /** React command; repeated activation is rejected by the deterministic run state. */
+  nextStage(): void {
+    if (this.destroyed || !this.initialized) return;
+    const update = startStageTransition(this.run);
+    if (!update.changed) return;
+    this.run = update.run;
+    this.transitionElapsed = 0;
+    this.stopInput();
+    this.publishRun();
+  }
+
+  private activateNextView(): void {
+    const update = finishStageTransition(this.run);
+    if (!update.changed || this.destroyed) return;
+    this.viewEpoch += 1;
+    this.run = update.run;
+    this.world.removeChild(this.turtle);
+    this.turtle.destroy({ children: true });
+    for (const target of this.targets) {
+      this.world.removeChild(target.view);
+      target.view.destroy({ children: true });
+    }
+    for (const child of this.effects.removeChildren()) child.destroy({ children: true });
+    this.particles.length = 0;
+    this.animal = { ...this.animal, reaction: "idle", elapsed: 0 };
+    this.turtle = new TurtleView(this.activeBodyView.presentation ?? "dorsal");
+    this.world.addChildAt(this.turtle, 1);
+    this.targets = this.createTargets();
+    for (const [index, target] of this.targets.entries()) {
+      target.view.addChild(target.asset, target.overlay);
+      target.asset.visible = this.barnacleTextures !== null;
+      this.world.addChildAt(target.view, index + 2);
+    }
+    this.app.canvas.dataset.bodyView = this.activeBodyView.presentation ?? "dorsal";
+    this.app.canvas.dataset.animalAsset = "vector";
+    this.layout();
+    this.callbacks.onAnimalChange(this.animal);
+    this.publishRun();
+    void this.loadAssets();
+  }
+
+  private publishRun(): void {
+    this.callbacks.onRunChange?.(summarizeRescueRun(this.run));
   }
 
   private readonly layout = (): void => {
@@ -156,9 +250,10 @@ export class BarnacleScene {
       this.backgroundAsset.position.set((width - this.backgroundAsset.texture.width * cover) / 2, (height - this.backgroundAsset.texture.height * cover) / 2);
     }
 
-    const turtleScale = Math.min(width / 820, height / 540);
-    const cx = width * 0.5;
-    const cy = height * 0.55;
+    const bodyView = this.activeBodyView;
+    const turtleScale = Math.min(width / bodyView.designSize.width, height / bodyView.designSize.height);
+    const cx = width * (bodyView.viewportAnchor?.x ?? 0.5);
+    const cy = height * (bodyView.viewportAnchor?.y ?? 0.5);
     this.turtleCenterY = cy;
     this.turtle.position.set(cx, cy);
     this.turtle.scale.set(turtleScale);
@@ -214,21 +309,24 @@ export class BarnacleScene {
   }
 
   private async loadAssets(): Promise<void> {
+    const epoch = this.viewEpoch;
+    const turtleView = this.turtle;
     try {
       const [background, turtle, barnacleNormal, barnacleNormalCracked, barnacleHard, barnacleHardCracked, scraper] = await Promise.all([
         Assets.load<Texture>(this.content.environment.background.src),
-        Assets.load<Texture>(this.content.stages[0].bodyView.asset.src),
+        Assets.load<Texture>(this.activeBodyView.asset.src),
         Assets.load<Texture>(SCENE_ASSETS.barnacleNormal),
         Assets.load<Texture>(SCENE_ASSETS.barnacleNormalCracked),
         Assets.load<Texture>(SCENE_ASSETS.barnacleHard),
         Assets.load<Texture>(SCENE_ASSETS.barnacleHardCracked),
         Assets.load<Texture>(SCENE_ASSETS.scraper),
       ]);
-      if (this.destroyed) return;
+      if (this.destroyed || epoch !== this.viewEpoch) return;
       this.backgroundAsset.texture = background;
       this.backgroundAsset.visible = true;
       this.backgroundFallback.visible = false;
-      this.turtle.useAsset(turtle);
+      turtleView.useAsset(turtle);
+      this.app.canvas.dataset.animalAsset = "raster";
       this.barnacleTextures = {
         normal: { intact: barnacleNormal, cracked: barnacleNormalCracked },
         hard: { intact: barnacleHard, cracked: barnacleHardCracked },
@@ -281,12 +379,16 @@ export class BarnacleScene {
       let onTarget = false;
       for (const target of this.targets) {
         if (target.barnacle.state === "removed" && (this.mode === "zen" || this.challenge.elapsed > target.protectedUntil)) continue;
-        if (!segmentIntersectsCircle(this.previousPoint, point, target.point, Math.max(12, target.radius))) continue;
+        const configuredRadius = this.content.stages[this.run.activeStageIndex].definition.placement.kind === "generated"
+          ? this.content.rescue.spawnProfile.minimumTargetHitRadius * this.turtle.scale.x : 0;
+        const hitRadius = Math.max(12, target.radius, configuredRadius);
+        if (!segmentIntersectsCircle(this.previousPoint, point, target.point, hitRadius)) continue;
         onTarget = true;
         const previousState = target.barnacle.state;
-        const result = damageBarnacle(target.barnacle, movement * DAMAGE_PER_PIXEL);
-        if (result.barnacle !== target.barnacle) {
-          target.barnacle = result.barnacle;
+        const previousBarnacle = target.barnacle;
+        const result = damageRescueTarget(this.run, target.id, movement * DAMAGE_PER_PIXEL);
+        this.run = result.run;
+        if (target.barnacle !== previousBarnacle) {
           target.wobbleElapsed = this.reducedMotion ? 0 : 0.16;
           this.audio.scrape();
           if (previousState === "intact" && target.barnacle.state === "cracked") {
@@ -307,7 +409,7 @@ export class BarnacleScene {
             x: (point.x - this.turtle.x) / scale,
             y: (point.y - this.turtleCenterY) / scale,
           },
-          this.content.stages[0].bodyView.cleanableRegions,
+          this.activeBodyView.cleanableRegions,
         );
         const oldHealth = this.challenge.health;
         this.challenge = scrapeShell(this.challenge, onCleanableSurface ? movement / scale : 0, onTarget);
@@ -334,6 +436,11 @@ export class BarnacleScene {
     this.updateTime();
     const seconds = ticker.deltaMS / 1000;
     this.clock += seconds;
+    if (this.run.status === "transitioning") {
+      this.transitionElapsed += seconds;
+      if (this.reducedMotion || this.transitionElapsed >= 0.45) this.activateNextView();
+      return;
+    }
     this.updateFeedback(seconds);
     const previousReaction = this.animal.reaction;
     this.animal = advanceAnimal(this.animal, seconds);
@@ -355,21 +462,23 @@ export class BarnacleScene {
       target.detachElapsed += ticker.deltaMS / 1000;
       target.view.y = target.detachElapsed * 60;
       if (target.detachElapsed >= DETACH_SECONDS) {
-        target.barnacle = finishDetachment(target.barnacle);
+        const update = finishRescueTargetDetachment(this.run, target.id);
+        this.run = update.run;
         target.protectedUntil = this.challenge.elapsed + 0.6;
-        if (this.mode === "challenge") this.challenge = recordRemoval(this.challenge, target.barnacle.id, this.targets.length);
-        removed = true;
+        if (this.mode === "challenge" && update.targetRemoved) this.challenge = recordRemoval(this.challenge, target.id, this.content.rescue.spawnProfile.targetCount);
+        removed ||= update.targetRemoved;
       }
       this.drawBarnacle(target);
     }
     if (!removed) return;
-    const barnacles = this.targets.map((target) => target.barnacle);
-    const progress = rescueProgress(barnacles);
+    const progress = overallRescueProgress(this.run);
     this.callbacks.onDamage(100 - progress);
     this.animal = animalAfterRemoval(this.animal, progress);
     this.callbacks.onAnimalChange(this.animal);
     this.publishChallenge();
-    if (isRescueComplete(barnacles)) {
+    this.publishRun();
+    if (this.run.status === "awaiting-next-stage") this.stopInput();
+    if (this.run.status === "complete") {
       this.spawnCelebration();
       this.audio.celebrate();
       this.stopInput();
@@ -469,6 +578,6 @@ export class BarnacleScene {
   }
 
   private get inputLocked(): boolean {
-    return this.animal.reaction === "celebrate" || (this.mode === "challenge" && this.challenge.status !== "playing");
+    return this.run.status !== "playing" || this.animal.reaction === "celebrate" || (this.mode === "challenge" && this.challenge.status !== "playing");
   }
 }

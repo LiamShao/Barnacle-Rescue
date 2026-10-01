@@ -1,67 +1,77 @@
-# MVP Acceptance Criteria
+# 验收标准与验证记录
 
-## Lifecycle status
+更新日期：2026-10-01。区分回归要求、下一阶段目标与实际检查结果。历史完成记录见 [归档](archive/ACCEPTANCE_CRITERIA_2026-09-30.md)。M10 曾跳过，正式发布尚未验收。
 
-The accepted development baseline contains M1–M9. M10 final QA/deployment was skipped by explicit product direction on 2026-09-15, so the project has entered formal development without a final QA or deployment sign-off. The verification policy below remains regression coverage for all subsequent work.
+## 当前三关的回归门槛
 
-## M1: first playable vertical slice
+| 场景 | 应保持的行为 |
+| --- | --- |
+| 刮除 | 移动穿过目标才伤害；点击/静止不能移除；目标独立开裂、脱落且只计数一次 |
+| 动物与进度 | 脱落增加进度；持续情绪与临时反应分离；最后一次 celebrate 后出现结果；重玩清空状态 |
+| Challenge | 计时/生命/得分/连击可见；超时/生命归零失败；成功才获时间奖励与评级；终态锁输入 |
+| Zen | 同样目标和清理方式；没有倒计时、生命惩罚、失败、分数和评级 |
+| 导航 | 三关可选；重玩、下一关、返回无旧计时/反应或额外 canvas；最后一关无下一关 |
+| 存档 | v2 稳定 ID；有效 v1 迁移；非法/重复/未知数据整体恢复默认；存储失败不阻断；活动运行不保存 |
+| 资源与声音 | 加载失败仍可清理；类型/开裂可辨；声音开关不重置进度且跨屏保留；遵守 reduced-motion 行为 |
+| UI | 主操作键盘可达，进度有可访问语义；桌面/320px 控件可达、结果可滚动、HUD 不遮挡互动区域 |
 
-- Given the development app starts, when the game route loads, then a sea turtle, one barnacle, and a scraper are visible without critical runtime errors.
-- Given mouse or touch input begins on the game viewport, when the pointer moves, then the scraper follows the active pointer and safely handles release/cancel.
-- Given the scraper blade moves continuously through the barnacle hit area, then HP decreases according to configured movement-based damage.
-- Given the pointer clicks or remains stationary over the barnacle, then it does not remove the barnacle as if scraped.
-- Given HP crosses its cracking threshold, then the barnacle visibly changes from intact to cracked.
-- Given HP reaches zero, then breaking/detachment occurs once, progress reaches 100%, and the turtle reacts positively.
-- Given the only barnacle is removed, then celebration plays and Rescue Complete appears.
-- Given the slice implementation is complete, then configured typecheck and relevant unit/browser tests pass.
+详细参数和规则以 [MVP_SPEC](MVP_SPEC.md)、[状态机](ANIMAL_STATE_MACHINE.md) 和 [关卡设计](LEVEL_DESIGN.md) 为准。
 
-## Complete MVP behavior
+## 双视角救援的验收要求
 
-Current implemented scope: M1–M9 core scraping, independent normal/hard targets, animal mood/reactions, three configured levels, Challenge, Zen, the main-menu/navigation flow, procedural gameplay feedback/audio, and local settings/completion persistence. Choose a mode and any level, replay it, advance after success, or return to selection/home. Challenge shows countdown, health, earned score and combo; expiry/zero health fail without a grade. Successful completion adds the time bonus and grades against configured par score. Zen shares cleaning and reactions without timing, health loss, failure, scoring or grading. Asset-backed audio/final feedback tuning remain formal-development work; final QA/deployment were skipped rather than completed.
+来源：[共享行为](MULTI_AREA_RESCUE_SPEC.md)、[具体区域规范](TURTLE_BODY_REGION_MAP.md)。Zen 的自动化与截图结果见下方 1A 记录；跨阶段 Challenge 和真实设备仍待 1B/1C。领域单测通过不代表所有玩家流程或设备验收完成。
 
-- Given a configured normal or hard barnacle, when scraped, then its own HP/tuning drives the same intact → cracked → breaking → removed lifecycle.
-- Given any of the three level configurations, when a run starts, then count, type mix, HP, size, timer, health, and valid placements come from configuration rather than component branches.
-- Given removal changes progress across a mood threshold, when the temporary relief ends, then the turtle returns to the newly derived mood.
-- Given all targets are removed, then completion and progress are recorded only once.
-- Given Challenge mode, when play proceeds, then timer, score, progress, and health are visible; expiry/depleted health can fail; successful completion produces a deterministic grade.
-- Given Zen mode, when the same level is played, then scraping behavior is unchanged while timer, failure pressure, aggressive score, and combo pressure are absent.
-- Given a result, when Replay or Next Level is selected, then a fresh valid run starts with no stale timers/reactions.
-- Given valid local progress/settings exist, when the app reloads, then they restore; given invalid or old data, then safe defaults load without crashing.
-- Given desktop and representative touch viewport sizes, when playing and navigating, then controls remain reachable and the gameplay area does not sit under the HUD.
-- Given accepted scraping, cracking, detachment, and final completion events, then restrained visual/audio feedback fires with those events without changing damage, input, or completion rules.
-- Given sound is disabled, when navigating or continuing the current run, then cues remain muted and gameplay progress is not reset.
-- Given reduced motion is preferred, when gameplay feedback fires, then particle counts are reduced and target wobble is omitted.
+- Given 同一内容和 typed seed，When 准备/重玩，Then 区域、类型、大小、坐标与 ID 相同，HP/阶段/模式运行状态重新初始化；从选择开始创建新 seed。
+- Given Whole Turtle Care，When 准备布局，Then 恰有 10 个目标、2 个坚硬目标、7 个受影响区域、6–7 个背部和 3–4 个腹面目标，命中范围合法且保持间距。
+- Given 第一阶段清理完，When 出现下一区域操作，Then 当前进度 100%、总进度低于 100%，操作获焦点，不出现最终庆祝/结果/完成存档。
+- Given 切换，When 重复点击、晚到指针或旧资源 promise 完成，Then 不重复切换、不伤害旧目标、不覆盖新视图，就绪前不接受刮除。
+- Given 腹面资源失败，When 切换完成，Then 腹面矢量降级完整、目标对齐且可完成。
+- Given Challenge 等待下一区域，When 时间耗尽，Then 整局失败且不写摘要；非互动切换暂停倒计时但不延长连击窗口。
+- Given 第二阶段开始，When 继续清理，Then 总进度、情绪、生命、得分与计时连续；Zen 不引入 Challenge 压力。
+- Given 最后目标脱落，When 庆祝完成，Then 成功、奖励/评级/结果/存档各发生一次；失败、放弃或 reload 不保存中间进度。
+- Given 桌面/窄屏，When 完成、重玩、失败重试和返回，Then 模式正确、UI 可达、无场景泄漏；固定 seed 浏览器语料覆盖八个生成区域。
+- Given 布局无法合法准备，When 开始，Then 显示可恢复错误和返回选择操作，不进入无目标/不可达场景，不保存成功。
 
-## Verification policy
+FD-203 已有活动阶段伤害、移除计数、幂等切换、领域完成和同 seed 重玩测试；剩余集成验收见 [路线图](FORMAL_ROADMAP.md)。
 
-M9 deterministic tests validate defaults, valid round trips, malformed/old/out-of-range data, unavailable storage, Zen completion and Challenge best-result retention. Browser coverage completes a rescue, reloads, and verifies restored sound/mode settings and the visible completion summary; invalid and old payloads restore defaults without preventing navigation. Active run state is not persisted.
+## 验证方法
 
-FD-107 extends that persistence contract with version-2 completion entries keyed by stable rescue IDs. Valid version-1 numeric entries migrate and preserve settings and results; malformed, unsupported, duplicate, unknown, or out-of-range version-1/version-2 payloads fall back atomically to defaults. Browser coverage verifies that a migrated summary remains visible and that the stored payload is rewritten to version 2.
+实现切片执行 `pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build` 和相关 `pnpm test:e2e`。跨域玩家流程变更使用完整浏览器套件；图形基线可用 `--workers=1`。领域规则用确定性单测，界面/生命周期用浏览器覆盖，视觉对齐用截图检查。
 
-FD-108 compatibility coverage validates the complete authored rescue catalog before use, including stable scopes and references, geometry, tuning, fixed placement containment/capacity/separation, and compatibility totals. Focused unit suites retain deterministic coverage for geometry, stable IDs, unique progress/completion, and save migration. The complete Chromium suite is the regression gate for unchanged desktop and narrow player flows; it does not replace real-device touch assessment.
+真实设备记录包含日期、设备、系统、浏览器、屏幕/方向、输入方式、模式/救援/seed、操作、结果与问题。触屏观感、误伤频率、音量、自动播放、实际 reduced-motion 感受和性能不能仅靠窄屏鼠标自动化认证。
 
-FD-109 deterministic tests cover typed-seed replay, different typed seeds, weighted eligible-region selection, per-stage coverage, affected-region limits, capacity, exact normal/hard totals, all geometry primitives, exclusions, configured minimum hit radius, cross-region spacing, bounded sampling, authored fallback, typed failure, stable generated IDs, and unchanged fixed layouts. The domain is available for FD2 but is not yet wired into the player-visible rescue flow.
+## 本次检查记录
 
-FD-201 specifies **Whole Turtle Care** as a two-stage dorsal/ventral case with 10 targets, two hard targets, exactly seven of eight affected regions, and a guaranteed 6–7 / 3–4 stage allocation. `TURTLE_BODY_REGION_MAP.md` is the acceptance source for its visibility, geometry, exclusion, copy, and tuning decisions. The listed maximum-size fallback anchors have been checked against the current containment and spacing helpers; player-visible asset, runtime, UI, seed-corpus, responsive, and real-device acceptance remain FD-202 through FD-212 rather than completed behavior.
+代码基点 `bba0ab9`；日期 2026-10-01。typecheck、lint、81 项单测（12 个文件）和 build 通过。Vitest 输出 jsdom canvas `getContext` 未实现提示，单测未失败。
 
-FD-202 provides the transparent ventral source/runtime sprites plus a complete centered vector fallback with plastron, throat/head, four flippers, and tail base. Deterministic view tests verify that dorsal remains the default, the ventral fallback covers the approved design-space silhouette bounds and animates, and supplying a raster replaces fallback presentation. This does not yet verify player-visible target alignment, asset-load failure during a stage transition, responsive view switching, or touch feel; those remain FD-204, FD-211, and FD-212.
+完整 Chromium 串行运行：17/18 通过；320px 主菜单/返回导航测试失败，日志为 Pixi WebGL 初始化失败、游戏 canvas 未创建。
 
-FD-203 deterministic coverage prepares the production `Whole Turtle Care` definition across 24 seeds and checks exact target/type/region totals plus the guaranteed stage allocation. Run-state tests cover active-stage-only damage, removal-based current and overall progress, single intermediate/final completion events, idempotent transition start/finish, same-seed replay with fresh HP and stages, and total abandonment. The production definition is validated but intentionally absent from the current selection and save identities; no player-visible multi-stage behavior is claimed before FD-204/FD-205.
+复查 `--grep 'return navigation'`：1280px 通过，随后 320px 再次出现同样失败（1/2 通过）。独立运行 `--grep 'navigation.*320px'`：1/1 通过。该证据提示问题与测试序列/图形资源环境有关，但尚未定位根因；不能将独立通过等同于全套通过。初次使用括号的 grep 未匹配测试，未计入验收。
 
-M8 browser coverage verifies that the sound control retains its session state across screens and can change during a run without remounting the canvas or resetting progress. Existing removal/replay coverage guards against feedback changing completion behavior or leaking a second canvas across runs. Particle timing, synthesized cue quality, actual mute audibility, reduced-motion feel and device autoplay behavior still require manual inspection because canvas pixels and audio output are not asserted by the browser suite.
+未执行实机触控、人工音频试听或新增双视角浏览器流程。14 个 Markdown 文件的本地链接检查及 `git diff --check` 通过。
 
-M7 browser coverage verifies initial main-menu focus, expandable instructions, absence of a game scene while in menus, accessible cleaning progress, return from an active run and successful result, retained mode and fresh progress after returning. Desktop and 320px layouts are covered. Earlier milestone descriptions refer to historical entry flows; the current entry is Main Menu → combined Mode/Level Select → Game → Result.
+## 阶段 0：生命周期修正后的验证
 
-M6 browser coverage exercises keyboard mode selection, Zen after simulated elapsed time beyond the Challenge limit and sustained bare-shell scraping, all three Zen levels, score-free results, replay, mode retention, and transitions from Zen to Challenge and failed Challenge back to Zen at desktop and 320px widths. Existing Challenge tests remain regression coverage. Real touch feel and ambience still need manual playtesting.
+日期：2026-10-01，代码为 `bba0ab9` 加工作区生命周期修正。本轮修正前的导航复查 2/2 通过，原 WebGL 初始化失败未复现。正常退出已有上下文释放；已确认的代码缺口为取消初始化路径未销毁完整未挂载图形树、销毁缺少幂等保护，以及单局销毁使用 boolean `true` 会清空页面级共享池。后者属于不必要的全局清理，尚未证明它直接造成原失败。
 
-M5 checks cover elapsed-time expiry and terminal-state locking, unsafe movement accumulation and target-hit reset, health failure, unique removal counting, combo expiry/cap/interruption, score clamping, time bonus and grade thresholds. Browser checks exercise both failure paths, replay after timeout, success grading and the existing multi-level flows.
+新增 3 项单测验证待初始化时取消、开始前销毁和初始化拒绝，检查真实 Pixi 图形树全部销毁且无游戏回调。新增浏览器测试在 320px 下连续进入/退出 12 次，检查运行时仅一个游戏 canvas/上下文、退出后游戏上下文归零及无运行时错误；Pixi 自身的共享 shader 能力探测上下文不计作游戏上下文。
 
-M4 coverage validates configuration counts, durability, placement containment and separation, and fresh run state. Browser tests exercise selection, all three levels in sequence, next-level boundaries, final-level replay and mid-run navigation at 1280px and 320px widths. Screenshots support layout inspection; automated completion does not establish difficulty balance or real touch feel.
+- `pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build`：通过，84 项单测 / 13 个文件；jsdom canvas 提示仍存在，未导致失败。
+- `pnpm test:e2e --workers=1`：完整 Chromium 19/19 通过，包含原桌面/320px 导航、全部关卡、模式、重玩、失败、存档和资源降级流程。
+- `pnpm test:e2e --workers=1 --grep 'return navigation|repeated rescue navigation' --repeat-each=3`：9/9 通过；桌面/320px 返回导航各通过三轮，12 次上下文释放检查也通过三轮。
 
-M3 adds deterministic mood threshold, relief restart/expiry, hurt priority, and celebration-lock checks. Browser coverage checks initial mood, return to neutral/relaxed after relief, celebration before the result, and mood reset on replay at desktop and narrow widths. Real mouse/touch playtesting is still needed to assess animation feel and legibility; narrow-width mouse automation does not certify touch interaction.
+新增监测测试首次将 Pixi 共享探测上下文计入游戏上下文，以及浏览器 favicon 404 计入场景错误，均已修正测试范围；一次提前启动的重复套件为避免与全套争用 GPU 被主动中断，不计作通过。检查通过证明当前自动回归基线恢复，不能证明历史间歇性问题的唯一根因已定位。未执行真实设备触控、音频或双视角玩家验收。
 
-Keep barnacle damage/state, mood derivation, scoring, level completion, and persistence validation deterministic and unit tested. Use Playwright for app flow, visible state transitions, mode differences, and pointer interaction where reliable. Document a manual drag/touch check when browser automation cannot establish interaction feel. Never mark an item verified unless its check was executed.
+## 1A：Zen 双视角集成验收
 
-## Explicitly deferred
+日期：2026-10-01，代码为 `bba0ab9` 加工作区阶段 0/1A 修改。Whole Turtle Care 仅在 Zen 选择中开放，原三关两种模式与下一救援顺序保留。
 
-Additional animals/environments/tools, backend, authentication, multiplayer, economy/shop/inventory, and skeletal animation are not required for MVP acceptance.
+- `pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build`：通过，93 项单测 / 15 个文件。新增会话准备/模式门槛、总进度与情绪、同 seed 重玩、新 seed 选择、无 legacy ID 存档、锚点验证和准备失败恢复检查；jsdom canvas 提示仍存在，未导致失败。
+- `pnpm test:e2e --workers=1`：完整 Chromium 23/23 通过。新增 1280px/320px 两阶段清理、100% 当前/低于 100% 总进度、中间不庆祝/不写完成、焦点与重复操作、腹面进入、同 seed 重玩、新案例与放弃、最终存档/reload、Challenge 中隐藏新救援、腹面资源失败降级和迟到资源保护。
+- 浏览器语料从 `zen-browser-0` 至 `zen-browser-23` 中选定两个互补 seed，实际两阶段刮除覆盖全部八个 spawn region；领域测试保留 24 个生产 seed 的总数、类型、区域数与阶段配额检查。
+- 已查看桌面/320px 背面与腹面、以及桌面腹面矢量降级截图：目标与视图对齐、阶段操作和 HUD 可达，窄屏以正常页面滚动访问画布。截图不证明触控观感或难度平衡。
+- 腹面降级三轮复查：`pnpm test:e2e --workers=1 tests/e2e/multi-area.spec.ts --grep 'underside fallback' --repeat-each=3`，3/3 通过。
+
+初轮新 E2E 为 3/4 通过，腹面降级出现一次 70% 进度停滞；独立重跑通过。检查发现阶段面板改变宿主尺寸而旧场景只监听窗口 resize，现已添加 ResizeObserver，并在浏览器刮除前验证画布显示尺寸与渲染尺寸同步。修改后的完整套件通过；不将独立重跑单独作为修复证明。
+
+准备失败恢复由 React 单测验证，真实随机案例与加载故障由浏览器流程验证。未执行跨阶段 Challenge、真实触屏/横竖屏、音频试听/自动播放和长期性能验收，FD2 整体仍未完成。

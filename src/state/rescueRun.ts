@@ -40,6 +40,27 @@ export type RescueRun = Readonly<{
   stages: readonly RescueRunStage[];
 }>;
 
+/** Low-frequency UI snapshot; target HP and frame state remain in the run/scene. */
+export type RescueRunSummary = Readonly<{
+  status: RescueRunStatus;
+  activeStageIndex: number;
+  stageCount: number;
+  stageName: string;
+  currentProgress: number;
+  overallProgress: number;
+}>;
+
+export function summarizeRescueRun(run: RescueRun): RescueRunSummary {
+  return {
+    status: run.status,
+    activeStageIndex: run.activeStageIndex,
+    stageCount: run.stages.length,
+    stageName: activeRescueStage(run).name,
+    currentProgress: currentStageProgress(run),
+    overallProgress: overallRescueProgress(run),
+  };
+}
+
 export type TargetDamageUpdate = Readonly<{
   run: RescueRun;
   startedBreaking: boolean;

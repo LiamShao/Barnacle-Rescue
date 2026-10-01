@@ -20,7 +20,7 @@ export type SaveData = {
 };
 
 export type SaveIdentity = Readonly<{
-  legacyLevelId: number;
+  legacyLevelId?: number;
   rescueId: RescueId;
 }>;
 
@@ -97,11 +97,13 @@ function indexIdentities(identities: readonly SaveIdentity[]): Readonly<{
   const rescueIds = new Set<RescueId>();
   const byLegacyLevelId = new Map<number, RescueId>();
   for (const identity of identities) {
-    if (!Number.isSafeInteger(identity.legacyLevelId) || identity.legacyLevelId < 0) return null;
     if (typeof identity.rescueId !== "string" || rescueIds.has(identity.rescueId)) return null;
-    if (byLegacyLevelId.has(identity.legacyLevelId)) return null;
     rescueIds.add(identity.rescueId);
-    byLegacyLevelId.set(identity.legacyLevelId, identity.rescueId);
+    if (identity.legacyLevelId !== undefined) {
+      if (!Number.isSafeInteger(identity.legacyLevelId) || identity.legacyLevelId < 0) return null;
+      if (byLegacyLevelId.has(identity.legacyLevelId)) return null;
+      byLegacyLevelId.set(identity.legacyLevelId, identity.rescueId);
+    }
   }
   return { rescueIds, byLegacyLevelId };
 }
